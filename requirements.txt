@@ -1,3 +1,9 @@
+streamlit
 pyTelegramBotAPI
 yfinance
 apscheduler
+supabase
+python-dotenv
+plotly
+pandas
+requests
