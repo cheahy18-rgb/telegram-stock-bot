@@ -5,12 +5,32 @@ import yfinance as yf
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 
+import os
+import json
+from dotenv import load_dotenv
+import telebot
+
 load_dotenv()
+
+# ១. ទាញយក Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise ValueError("❌ រកមិនឃើញ BOT_TOKEN! សូមពិនិត្យមើល File .env ឬ Environment Variables លើ Cloud")
+
 bot = telebot.TeleBot(BOT_TOKEN)
 
-DB_NAME = "alerts.db"
+# ២. ប្រព័ន្ធគ្រប់គ្រង Database (JSON File)
+DB_FILE = "alerts.json"
 
+def load_alerts():
+    if not os.path.exists(DB_FILE):
+        return {}
+    try:
+        with open(DB_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 # --- ១. ប្រព័ន្ធគ្រប់គ្រង SQLite Database ---
 def init_db():
     """បង្កើត Table Alerts ប្រសិនបើមិនទាន់មាន"""
