@@ -30,9 +30,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ==========================================
 # ២. Supabase Database Functions
 # ==========================================
-# ==========================================
-# ២. Supabase Database Functions (កែប្រែរួច)
-# ==========================================
 def add_alert(chat_id, ticker, target_price):
     try:
         data = {
@@ -43,7 +40,7 @@ def add_alert(chat_id, ticker, target_price):
         supabase.table("alerts").insert(data).execute()
         return True
     except Exception as e:
-        print(f"Error adding alert: {e}")  # ប្រើ print ជំនួស st.error
+        print(f"Error adding alert: {e}")
         return False
 
 def get_alerts():
@@ -51,7 +48,7 @@ def get_alerts():
         response = supabase.table("alerts").select("*").execute()
         return response.data
     except Exception as e:
-        print(f"Error fetching alerts: {e}")  # ប្រើ print ជំនួស st.error
+        print(f"Error fetching alerts: {e}")
         return []
 
 # ==========================================
@@ -62,7 +59,7 @@ def send_welcome(message):
     welcome_text = (
         "👋 **ជម្រាបសួរ! ខ្ញុំជា Stock Analyzer Bot**\n\n"
         "📈 **របៀបប្រើប្រាស់៖**\n"
-        "- ផ្ញើឈ្មោះ Stock Ticker (ឧទាហរណ៍៖ `AAPL`, `MARA`, `RIOT`) ដើម្បីមើលតម្លៃ\n"
+        "- ផ្ញើឈ្មោះ Stock Ticker (ឧទាហរណ៍៖ `AAPL`, `PLTR`, `RIOT`) ដើម្បីមើលតម្លៃ និងការវិភាគ\n"
         "- កំណត់ Alert៖ `/alert AAPL 200`\n"
         "- មើល Alert របស់អ្នក៖ `/myalerts`"
     )
@@ -151,7 +148,7 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     st.header("🔍 Stock Query")
-    selected_ticker = st.text_input("បញ្ចូល Stock Ticker (ឧ. AAPL, QCOM):", value="AAPL").upper()
+    selected_ticker = st.text_input("បញ្ចូល Stock Ticker (ឧ. AAPL, PLTR):", value="AAPL").upper()
     
     if selected_ticker:
         try:
