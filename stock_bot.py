@@ -58,8 +58,8 @@ def get_alerts():
 def send_welcome(message):
     welcome_text = (
         "👋 **ជម្រាបសួរ! ខ្ញុំជា Stock Analyzer Bot**\n\n"
-        "📈 **របៀបប្រកែក៖**\n"
-        "- ផ្ញើឈ្មោះ Stock Ticker (ឧទាហរណ៍៖ `AAPL`, `MARA`, `QCOM`) ដើម្បីមើលតម្លៃ\n"
+        "📈 **របៀបប្រើប្រាស់៖**\n"
+        "- ផ្ញើឈ្មោះ Stock Ticker (ឧទាហរណ៍៖ `AAPL`, `MARA`, `RIOT`) ដើម្បីមើលតម្លៃ\n"
         "- កំណត់ Alert៖ `/alert AAPL 200`\n"
         "- មើល Alert របស់អ្នក៖ `/myalerts`"
     )
@@ -124,9 +124,12 @@ def get_stock_info(message):
 # ==========================================
 def start_bot():
     print("🤖 Telegram Bot thread is starting...")
-    bot.skip_pending_commits()
+    try:
+        bot.skip_pending_commits()
+    except Exception as e:
+        print(f"Skip pending commits info: {e}")
     bot.infinity_polling(none_stop=True)
-    
+
 # ការពារ Thread រត់ជាន់គ្នានៅពេល Streamlit Re-run លើ UI
 if "bot_started" not in st.session_state:
     st.session_state["bot_started"] = True
@@ -165,7 +168,7 @@ with col1:
     alerts_data = get_alerts()
     if alerts_data:
         df_alerts = pd.DataFrame(alerts_data)
-        st.dataframe(df_alerts[['chat_id', 'ticker', 'target_price', 'created_at']], use_container_width=True)
+        st.dataframe(df_alerts[['chat_id', 'ticker', 'target_price', 'created_at']], width='stretch')
     else:
         st.info("មិនទាន់មាន Alert ក្នុង Database នៅឡើយទេ។")
 
@@ -185,6 +188,6 @@ with col2:
                     close=hist['Close']
                 )])
                 fig.update_layout(title=f"{selected_ticker} Candlestick Chart", yaxis_title="Price (USD)", template="plotly_dark")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
         except Exception as e:
             st.error(f"Cannot generate chart: {e}")
