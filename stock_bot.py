@@ -17,13 +17,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# ការពារ Error ពេលខ្វះ Key លើ Cloud Server
 if not BOT_TOKEN:
     raise ValueError("❌ រកមិនឃើញ BOT_TOKEN! សូមពិនិត្យ Environment Variables លើ Render")
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ រកមិនឃើញ SUPABASE_URL ឬ SUPABASE_KEY!")
 
-# បង្កើត Clients សម្រាប់ Telegram Bot និង Supabase
 bot = telebot.TeleBot(BOT_TOKEN)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -52,14 +50,14 @@ def get_alerts():
         return []
 
 # ==========================================
-# ៣. Telegram Bot Handlers & Logic
+# ៣. Telegram Bot Handlers & Rich Report Logic
 # ==========================================
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
         "👋 **ជម្រាបសួរ! ខ្ញុំជា Stock Analyzer Bot**\n\n"
         "📈 **របៀបប្រើប្រាស់៖**\n"
-        "- ផ្ញើឈ្មោះ Stock Ticker (ឧទាហរណ៍៖ `AAPL`, `PLTR`, `RIOT`) ដើម្បីមើលតម្លៃ និងការវិភាគ\n"
+        "- ផ្ញើឈ្មោះ Stock Ticker (ឧទាហរណ៍៖ `PLTR`, `AAPL`, `MSFT`) ដើម្បីទទួលបានរបាយការណ៍វិភាគលម្អិត\n"
         "- កំណត់ Alert៖ `/alert AAPL 200`\n"
         "- មើល Alert របស់អ្នក៖ `/myalerts`"
     )
@@ -85,39 +83,65 @@ def set_alert(message):
         bot.reply_to(message, "⚠️ តម្លៃ Target Price ត្រូវតែជាលេខ!")
 
 @bot.message_handler(func=lambda message: True)
-def get_stock_info(message):
+def get_stock_analysis(message):
     ticker_symbol = message.text.strip().upper()
     
-    # មិនដំណើរការប្រសិនបើជា Command
     if ticker_symbol.startswith('/'):
         return
 
     try:
         stock = yf.Ticker(ticker_symbol)
-        info = stock.fast_info
+        info = stock.info
+        fast_info = stock.fast_info
         
-        current_price = info.last_price
-        prev_close = info.previous_close
+        company_name = info.get('longName', ticker_symbol)
+        sector = info.get('sector', 'N/A')
+        current_price = fast_info.last_price or info.get('currentPrice', 0.0)
         
-        if current_price is None or prev_close is None:
-            bot.reply_to(message, f"❌ រកមិនឃើញទិន្នន័យសម្រាប់ Ticker: `{ticker_symbol}` ទេ!", parse_mode="Markdown")
-            return
+        pe_ratio = info.get('trailingPE') or info.get('forwardPE') or 0.0
+        eps = info.get('trailingEps') or 0.0
+        
+        # គណនា Valuation & Target Price
+        target_sell = info.get('targetMeanPrice')
+        if not target_sell or target_sell == 0:
+            target_sell = current_price * 1.2  # ករណីគ្មានទិន្នន័យពី Analyst ប្រើ +20%
             
-        change = current_price - prev_close
-        change_pct = (change / prev_close) * 100
+        fair_value = target_sell * 0.833  # Fair Value កំណត់ប្រហាក់ប្រហែល
         
-        status_icon = "🟢" if change >= 0 else "🔴"
-        
+        # គណនា % Upside និងស្ថានភាព
+        if current_price > 0:
+            upside = ((target_sell - current_price) / current_price) * 100
+        else:
+            upside = 0.0
+            
+        if current_price < fair_value:
+            status_text = "🟢 Under-valued"
+        elif current_price > target_sell:
+            status_text = "🔴 Over-valued"
+        else:
+            status_text = "🟡 Fairly-valued"
+
+        # រៀបចំទម្រង់សារដូចរូបភាព[cite: 12]
         response_msg = (
-            f"📊 **{ticker_symbol} Stock Info**\n\n"
-            f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
-            f"{status_icon} បម្រែបម្រួល៖ **${change:+.2f} ({change_pct:+.2f}%)**\n"
-            f"📉 តម្លៃបិទម្សិលមិញ៖ **${prev_close:.2f}**"
+            f"📊 **[របាយការណ៍វិភាគ៖ {ticker_symbol}](https://finance.yahoo.com/quote/{ticker_symbol})**\n\n"
+            f"🏢 **ក្រុមហ៊ុន៖** {company_name}\n"
+            f"🏭 **វិស័យ៖** {sector}\n"
+            f"💵 **តម្លៃបច្ចុប្បន្ន៖** ${current_price:.2f}\n"
+            f"📈 **P/E Ratio:** {pe_ratio:.2f} | **EPS:** ${eps:.2f}\n\n"
+            f"-----------------------------------\n"
+            f"🎯 **ការវាយតម្លៃ (Valuation)**\n"
+            f"-----------------------------------\n"
+            f"💡 **តម្លៃសមរម្យ (Fair Value)៖** ${fair_value:.2f}\n"
+            f"លោកអ្នកគួរដឹង៖ {status_text}\n\n"
+            f"🚀 **តម្លៃគួរលក់ (Target Sell)៖** ${target_sell:.2f}\n"
+            f"📈 **ឱកាសចំណេញ (Upside)៖** {upside:+.1f}%"
         )
-        bot.reply_to(message, response_msg, parse_mode="Markdown")
+        
+        bot.reply_to(message, response_msg, parse_mode="Markdown", disable_web_page_preview=True)
         
     except Exception as e:
-        bot.reply_to(message, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យ `{ticker_symbol}`", parse_mode="Markdown")
+        print(f"Error fetching analysis for {ticker_symbol}: {e}")
+        bot.reply_to(message, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យសម្រាប់ `{ticker_symbol}`!", parse_mode="Markdown")
 
 # ==========================================
 # ៤. Running Telegram Bot inside Thread
@@ -130,7 +154,6 @@ def start_bot():
         print(f"Skip pending commits info: {e}")
     bot.infinity_polling(none_stop=True)
 
-# ការពារ Thread រត់ជាន់គ្នានៅពេល Streamlit Re-run លើ UI
 if "bot_started" not in st.session_state:
     st.session_state["bot_started"] = True
     bot_thread = threading.Thread(target=start_bot, daemon=True)
@@ -148,7 +171,7 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     st.header("🔍 Stock Query")
-    selected_ticker = st.text_input("បញ្ចូល Stock Ticker (ឧ. AAPL, PLTR):", value="AAPL").upper()
+    selected_ticker = st.text_input("បញ្ចូល Stock Ticker (ឧ. AAPL, PLTR):", value="PLTR").upper()
     
     if selected_ticker:
         try:
