@@ -124,8 +124,9 @@ def get_stock_info(message):
 # ==========================================
 def start_bot():
     print("🤖 Telegram Bot thread is starting...")
-    bot.infinity_polling(skip_pending_commits=True)
-
+    bot.skip_pending_commits()
+    bot.infinity_polling(none_stop=True)
+    
 # ការពារ Thread រត់ជាន់គ្នានៅពេល Streamlit Re-run លើ UI
 if "bot_started" not in st.session_state:
     st.session_state["bot_started"] = True
