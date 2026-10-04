@@ -30,6 +30,9 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ==========================================
 # ២. Supabase Database Functions
 # ==========================================
+# ==========================================
+# ២. Supabase Database Functions (កែប្រែរួច)
+# ==========================================
 def add_alert(chat_id, ticker, target_price):
     try:
         data = {
@@ -40,7 +43,7 @@ def add_alert(chat_id, ticker, target_price):
         supabase.table("alerts").insert(data).execute()
         return True
     except Exception as e:
-        st.error(f"Error adding alert: {e}")
+        print(f"Error adding alert: {e}")  # ប្រើ print ជំនួស st.error
         return False
 
 def get_alerts():
@@ -48,7 +51,7 @@ def get_alerts():
         response = supabase.table("alerts").select("*").execute()
         return response.data
     except Exception as e:
-        st.error(f"Error fetching alerts: {e}")
+        print(f"Error fetching alerts: {e}")  # ប្រើ print ជំនួស st.error
         return []
 
 # ==========================================
