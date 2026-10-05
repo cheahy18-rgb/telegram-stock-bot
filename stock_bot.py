@@ -50,7 +50,7 @@ def get_alerts():
         return []
 
 # ==========================================
-# ៣. Telegram Bot Handlers & Rich Report Logic
+# ៣. Telegram Bot Handlers & Rich Report
 # ==========================================
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
@@ -101,14 +101,12 @@ def get_stock_analysis(message):
         pe_ratio = info.get('trailingPE') or info.get('forwardPE') or 0.0
         eps = info.get('trailingEps') or 0.0
         
-        # គណនា Valuation & Target Price
         target_sell = info.get('targetMeanPrice')
         if not target_sell or target_sell == 0:
-            target_sell = current_price * 1.2  # ករណីគ្មានទិន្នន័យពី Analyst ប្រើ +20%
+            target_sell = current_price * 1.2
             
-        fair_value = target_sell * 0.833  # Fair Value កំណត់ប្រហាក់ប្រហែល
+        fair_value = target_sell * 0.833
         
-        # គណនា % Upside និងស្ថានភាព
         if current_price > 0:
             upside = ((target_sell - current_price) / current_price) * 100
         else:
@@ -121,7 +119,6 @@ def get_stock_analysis(message):
         else:
             status_text = "🟡 Fairly-valued"
 
-        # រៀបចំទម្រង់សារដូចរូបភាព[cite: 12]
         response_msg = (
             f"📊 **[របាយការណ៍វិភាគ៖ {ticker_symbol}](https://finance.yahoo.com/quote/{ticker_symbol})**\n\n"
             f"🏢 **ក្រុមហ៊ុន៖** {company_name}\n"
@@ -169,14 +166,33 @@ st.success("🤖 Telegram Bot ត្រូវបានដាស់ឱ្យដ�
 
 col1, col2 = st.columns([1, 2])
 
+# ផែនទីកំណត់ Period & Interval សម្រាប់ yfinance
+timeframe_map = {
+    "1 Day (1D)": {"period": "1d", "interval": "5m"},
+    "5 Days (5D)": {"period": "5d", "interval": "15m"},
+    "1 Month (1M)": {"period": "1mo", "interval": "1d"},
+    "6 Months (6M)": {"period": "6mo", "interval": "1d"},
+    "1 Year (1Y)": {"period": "1y", "interval": "1wk"},
+    "5 Years (5Y)": {"period": "5y", "interval": "1mo"}
+}
+
 with col1:
     st.header("🔍 Stock Query")
     selected_ticker = st.text_input("បញ្ចូល Stock Ticker (ឧ. AAPL, PLTR):", value="PLTR").upper()
     
+    # ជ្រើសរើស Timeframe
+    selected_timeframe_label = st.selectbox(
+        "⏱️ ជ្រើសរើស Timeframe សម្រាប់ Chart:",
+        list(timeframe_map.keys()),
+        index=2 # Default យក 1 Month
+    )
+    
+    tf_setting = timeframe_map[selected_timeframe_label]
+    
     if selected_ticker:
         try:
             stock = yf.Ticker(selected_ticker)
-            hist = stock.history(period="1mo")
+            hist = stock.history(period=tf_setting["period"], interval=tf_setting["interval"])
             
             if not hist.empty:
                 last_price = hist['Close'].iloc[-1]
@@ -196,11 +212,11 @@ with col1:
         st.info("មិនទាន់មាន Alert ក្នុង Database នៅឡើយទេ។")
 
 with col2:
-    st.header(f"📊 {selected_ticker} Stock Price Chart (1 Month)")
+    st.header(f"📊 {selected_ticker} Stock Price Chart ({selected_timeframe_label})")
     if selected_ticker:
         try:
             stock = yf.Ticker(selected_ticker)
-            hist = stock.history(period="1mo")
+            hist = stock.history(period=tf_setting["period"], interval=tf_setting["interval"])
             
             if not hist.empty:
                 fig = go.Figure(data=[go.Candlestick(
@@ -210,7 +226,14 @@ with col2:
                     low=hist['Low'],
                     close=hist['Close']
                 )])
-                fig.update_layout(title=f"{selected_ticker} Candlestick Chart", yaxis_title="Price (USD)", template="plotly_dark")
+                fig.update_layout(
+                    title=f"{selected_ticker} Candlestick Chart ({selected_timeframe_label})",
+                    yaxis_title="Price (USD)",
+                    template="plotly_dark",
+                    xaxis_rangeslider_visible=False
+                )
                 st.plotly_chart(fig, width='stretch')
+            else:
+                st.error("មិនមានទិន្នន័យសម្រាប់ Timeframe នេះទេ!")
         except Exception as e:
             st.error(f"Cannot generate chart: {e}")
