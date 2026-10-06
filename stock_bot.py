@@ -1,4 +1,5 @@
 import os
+import time
 import threading
 import pandas as pd
 import yfinance as yf
@@ -7,7 +8,6 @@ import streamlit as st
 import telebot
 from dotenv import load_dotenv
 from supabase import Client, create_client
-import time
 
 # ==========================================
 # ១. ទាញយក Environment Variables & Setup
@@ -36,10 +36,11 @@ def add_alert(chat_id, ticker, target_price):
             "ticker": ticker.upper(),
             "target_price": float(target_price)
         }
-        supabase.table("alerts").insert(data).execute()
+        res = supabase.table("alerts").insert(data).execute()
+        print(f"✅ Supabase Insert Result: {res}")
         return True
     except Exception as e:
-        print(f"Error adding alert: {e}")
+        print(f"❌ Supabase Insert Error: {e}")
         return False
 
 def get_alerts():
@@ -47,11 +48,19 @@ def get_alerts():
         response = supabase.table("alerts").select("*").execute()
         return response.data
     except Exception as e:
-        print(f"Error fetching alerts: {e}")
+        print(f"❌ Supabase Fetch Error: {e}")
         return []
 
+def delete_alert(alert_id):
+    try:
+        supabase.table("alerts").delete().eq("id", alert_id).execute()
+        return True
+    except Exception as e:
+        print(f"❌ Supabase Delete Error: {e}")
+        return False
+
 # ==========================================
-# ៣. Telegram Bot Handlers & Rich Report
+# ៣. Telegram Bot Handlers & Rich Report Logic
 # ==========================================
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
@@ -63,6 +72,22 @@ def send_welcome(message):
         "- មើល Alert របស់អ្នក៖ `/myalerts`"
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
+
+@bot.message_handler(commands=['myalerts'])
+def show_my_alerts(message):
+    chat_id = str(message.chat.id)
+    alerts = get_alerts()
+    user_alerts = [a for a in alerts if str(a.get('chat_id')) == chat_id]
+    
+    if not user_alerts:
+        bot.reply_to(message, "ℹ️ អ្នកមិនទាន់មាន Alert កំពុងសកម្មនៅក្នុងប្រព័ន្ធនៅឡើយទេ។")
+        return
+        
+    msg = "🔔 **បញ្ជី Alert របស់អ្នក៖**\n\n"
+    for a in user_alerts:
+        msg += f"• **{a.get('ticker')}** ត្រឹមតម្លៃ **${float(a.get('target_price', 0)):.2f}**\n"
+    
+    bot.reply_to(message, msg, parse_mode="Markdown")
 
 @bot.message_handler(commands=['alert'])
 def set_alert(message):
@@ -79,7 +104,7 @@ def set_alert(message):
         if add_alert(chat_id, ticker, target_price):
             bot.reply_to(message, f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹមតម្លៃ **${target_price:.2f}** ដោយជោគជ័យ!", parse_mode="Markdown")
         else:
-            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក alert ទៅក្នុង Database!")
+            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក alert ទៅក្នុង Database! (សូមពិនិត្យ RLS លើ Supabase)")
     except ValueError:
         bot.reply_to(message, "⚠️ តម្លៃ Target Price ត្រូវតែជាលេខ!")
 
@@ -142,7 +167,7 @@ def get_stock_analysis(message):
         bot.reply_to(message, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យសម្រាប់ `{ticker_symbol}`!", parse_mode="Markdown")
 
 # ==========================================
-# ៤. Running Telegram Bot inside Thread
+# ៤. Background Threads (Bot & Price Alert Checker)
 # ==========================================
 def start_bot():
     print("🤖 Telegram Bot thread is starting...")
@@ -152,25 +177,8 @@ def start_bot():
         print(f"Skip pending commits info: {e}")
     bot.infinity_polling(none_stop=True)
 
-if "bot_started" not in st.session_state:
-    st.session_state["bot_started"] = True
-    bot_thread = threading.Thread(target=start_bot, daemon=True)
-    bot_thread.start()
-
-# ==========================================
-# ៥. Streamlit Dashboard Web Interface
-# ==========================================
-st.set_page_config(page_title="Stock Analyzer & Bot Dashboard", page_icon="📈", layout="wide")
-
-st.title("📈 Stock Analyzer Dashboard & Telegram Bot")
-st.success("🤖 Telegram Bot ត្រូវបានដាស់ឱ្យដំណើរការ (Active Background Worker)!")
-
-col1, col2 = st.columns([1, 2])
-# ==========================================
-# ៦. Auto Price Alert Checker Thread
-# ==========================================
 def check_price_alerts():
-    print("🔔 Starting Price Alert Checker Background Task...")
+    print("🔔 Auto Price Alert Checker Thread started...")
     while True:
         try:
             alerts = get_alerts()
@@ -183,41 +191,48 @@ def check_price_alerts():
                 if not ticker or not target_price:
                     continue
                 
-                # ទាញយកតម្លៃ Stock បច្ចុប្បន្ន
                 stock = yf.Ticker(ticker)
                 current_price = stock.fast_info.last_price
                 
                 if current_price is None:
                     continue
                 
-                # លក្ខខណ្ឌ៖ ប្រសិនបើតម្លៃបច្ចុប្បន្នឡើងដល់ ឬលើស Target Price
+                # លក្ខខណ្ឌប្រសិនបើតម្លៃឡើងដល់ ឬលើស Target Price
                 if current_price >= target_price:
                     alert_msg = (
                         f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
-                        f"📈 **{ticker}** ពេលនេះបានឡើងដល់តម្លៃ target ហើយ!\n"
+                        f"📈 **{ticker}** ពេលនេះបានឡើងដល់តម្លៃ Target ហើយ!\n"
                         f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
                         f"🎯 តម្លៃ Target របស់អ្នក៖ **${target_price:.2f}**"
                     )
-                    # ផ្ញើសារជូនដំណឹងទៅ Telegram
                     bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
-                    
-                    # លុប Alert ចោលពី Supabase បន្ទាប់ពីបាន Alert រួច (ដើម្បីកុំឱ្យវាផ្ញើសារជាន់គ្នា)
-                    supabase.table("alerts").delete().eq("id", alert_id).execute()
-                    print(f"✅ Alert sent and removed for {ticker} (Chat ID: {chat_id})")
+                    delete_alert(alert_id)
+                    print(f"✅ Alert Triggered & Deleted for {ticker} (Chat ID: {chat_id})")
                     
         except Exception as e:
-            print(f"❌ Error checking alerts: {e}")
+            print(f"❌ Error in price alert checker thread: {e}")
             
-        # រង់ចាំ 300 វិនាទី (5 នាទី) រួចត្រួតពិនិត្យម្តងទៀត
-        time.sleep(300)
+        time.sleep(300) # ត្រួតពិនិត្យរៀងរាល់ ៥ នាទីម្តង
 
-# ដាស់ Alert Checker Thread ឱ្យរត់ស្របគ្នាជាមួយ Bot
+# បង្កើត Threads ឱ្យរត់ស្របគ្នាពេល Streamlit Launch
+if "bot_started" not in st.session_state:
+    st.session_state["bot_started"] = True
+    threading.Thread(target=start_bot, daemon=True).start()
+
 if "alert_checker_started" not in st.session_state:
     st.session_state["alert_checker_started"] = True
-    alert_thread = threading.Thread(target=check_price_alerts, daemon=True)
-    alert_thread.start()
-    
-# ផែនទីកំណត់ Period & Interval សម្រាប់ yfinance
+    threading.Thread(target=check_price_alerts, daemon=True).start()
+
+# ==========================================
+# ៥. Streamlit Dashboard Web Interface
+# ==========================================
+st.set_page_config(page_title="Stock Analyzer & Bot Dashboard", page_icon="📈", layout="wide")
+
+st.title("📈 Stock Analyzer Dashboard & Telegram Bot")
+st.success("🤖 Telegram Bot & Price Alert Checker ត្រូវបានដាស់ឱ្យដំណើរការ (Active Background Workers)!")
+
+col1, col2 = st.columns([1, 2])
+
 timeframe_map = {
     "1 Day (1D)": {"period": "1d", "interval": "5m"},
     "5 Days (5D)": {"period": "5d", "interval": "15m"},
@@ -231,11 +246,10 @@ with col1:
     st.header("🔍 Stock Query")
     selected_ticker = st.text_input("បញ្ចូល Stock Ticker (ឧ. AAPL, PLTR):", value="PLTR").upper()
     
-    # ជ្រើសរើស Timeframe
     selected_timeframe_label = st.selectbox(
         "⏱️ ជ្រើសរើស Timeframe សម្រាប់ Chart:",
         list(timeframe_map.keys()),
-        index=2 # Default យក 1 Month
+        index=2
     )
     
     tf_setting = timeframe_map[selected_timeframe_label]
@@ -258,7 +272,8 @@ with col1:
     alerts_data = get_alerts()
     if alerts_data:
         df_alerts = pd.DataFrame(alerts_data)
-        st.dataframe(df_alerts[['chat_id', 'ticker', 'target_price', 'created_at']], width='stretch')
+        display_cols = [c for c in ['chat_id', 'ticker', 'target_price', 'created_at'] if c in df_alerts.columns]
+        st.dataframe(df_alerts[display_cols], width='stretch')
     else:
         st.info("មិនទាន់មាន Alert ក្នុង Database នៅឡើយទេ។")
 
