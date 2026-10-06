@@ -7,6 +7,7 @@ import streamlit as st
 import telebot
 from dotenv import load_dotenv
 from supabase import Client, create_client
+import time
 
 # ==========================================
 # ១. ទាញយក Environment Variables & Setup
@@ -165,7 +166,57 @@ st.title("📈 Stock Analyzer Dashboard & Telegram Bot")
 st.success("🤖 Telegram Bot ត្រូវបានដាស់ឱ្យដំណើរការ (Active Background Worker)!")
 
 col1, col2 = st.columns([1, 2])
+# ==========================================
+# ៦. Auto Price Alert Checker Thread
+# ==========================================
+def check_price_alerts():
+    print("🔔 Starting Price Alert Checker Background Task...")
+    while True:
+        try:
+            alerts = get_alerts()
+            for alert in alerts:
+                alert_id = alert.get('id')
+                chat_id = alert.get('chat_id')
+                ticker = alert.get('ticker')
+                target_price = float(alert.get('target_price', 0))
+                
+                if not ticker or not target_price:
+                    continue
+                
+                # ទាញយកតម្លៃ Stock បច្ចុប្បន្ន
+                stock = yf.Ticker(ticker)
+                current_price = stock.fast_info.last_price
+                
+                if current_price is None:
+                    continue
+                
+                # លក្ខខណ្ឌ៖ ប្រសិនបើតម្លៃបច្ចុប្បន្នឡើងដល់ ឬលើស Target Price
+                if current_price >= target_price:
+                    alert_msg = (
+                        f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
+                        f"📈 **{ticker}** ពេលនេះបានឡើងដល់តម្លៃ target ហើយ!\n"
+                        f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
+                        f"🎯 តម្លៃ Target របស់អ្នក៖ **${target_price:.2f}**"
+                    )
+                    # ផ្ញើសារជូនដំណឹងទៅ Telegram
+                    bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
+                    
+                    # លុប Alert ចោលពី Supabase បន្ទាប់ពីបាន Alert រួច (ដើម្បីកុំឱ្យវាផ្ញើសារជាន់គ្នា)
+                    supabase.table("alerts").delete().eq("id", alert_id).execute()
+                    print(f"✅ Alert sent and removed for {ticker} (Chat ID: {chat_id})")
+                    
+        except Exception as e:
+            print(f"❌ Error checking alerts: {e}")
+            
+        # រង់ចាំ 300 វិនាទី (5 នាទី) រួចត្រួតពិនិត្យម្តងទៀត
+        time.sleep(300)
 
+# ដាស់ Alert Checker Thread ឱ្យរត់ស្របគ្នាជាមួយ Bot
+if "alert_checker_started" not in st.session_state:
+    st.session_state["alert_checker_started"] = True
+    alert_thread = threading.Thread(target=check_price_alerts, daemon=True)
+    alert_thread.start()
+    
 # ផែនទីកំណត់ Period & Interval សម្រាប់ yfinance
 timeframe_map = {
     "1 Day (1D)": {"period": "1d", "interval": "5m"},
