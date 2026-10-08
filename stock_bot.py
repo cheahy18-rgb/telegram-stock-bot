@@ -68,25 +68,32 @@ def update_alert_current_price(alert_id, new_price):
         print(f"❌ Supabase Update Error: {e}")
 
 # ==========================================
-# ៣. Helper Function: បង្កើត Chart Image
+# ៣. Helper Function: បង្កើត Chart Image (Safe Version)
 # ==========================================
 def generate_chart_image(ticker):
-    stock = yf.Ticker(ticker)
-    hist = stock.history(period="1y")
-    if hist.empty:
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="1y")
+        if hist.empty:
+            print(f"❌ No history data for {ticker}")
+            return None
+        
+        fig = go.Figure(data=[go.Candlestick(
+            x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
+        )])
+        fig.update_layout(
+            title=f"{ticker} 1-Year Candlestick Chart",
+            yaxis_title="Price (USD)",
+            template="plotly_dark",
+            xaxis_rangeslider_visible=False
+        )
+        
+        # បំប្លែងទៅជា PNG Bytes
+        img_bytes = fig.to_image(format="png", engine="kaleido")
+        return io.BytesIO(img_bytes)
+    except Exception as e:
+        print(f"❌ Error generating chart image for {ticker}: {e}")
         return None
-    
-    fig = go.Figure(data=[go.Candlestick(
-        x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
-    )])
-    fig.update_layout(
-        title=f"{ticker} 1-Year Candlestick Chart",
-        yaxis_title="Price (USD)",
-        template="plotly_dark",
-        xaxis_rangeslider_visible=False
-    )
-    img_bytes = fig.to_image(format="png")
-    return io.BytesIO(img_bytes)
 
 # ==========================================
 # ៤. Telegram Bot Handlers
