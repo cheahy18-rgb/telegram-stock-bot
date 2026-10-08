@@ -19,7 +19,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://your-streamlit-app.onrender.com") # ដាក់ Link Render Dashboard របស់អ្នក
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://your-streamlit-app.onrender.com")
 
 if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ សូមពិនិត្យមើល Environment Variables (BOT_TOKEN, SUPABASE_URL, SUPABASE_KEY)!")
@@ -28,17 +28,18 @@ bot = telebot.TeleBot(BOT_TOKEN)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==========================================
-# ២. Supabase Database Functions
+# ២. Supabase Database Functions (បន្ថែម current_price)
 # ==========================================
-def add_alert(chat_id, ticker, target_price, fair_value=None):
+def add_alert(chat_id, ticker, target_price, current_price=None, fair_value=None):
     try:
         data = {
             "chat_id": str(chat_id),
             "ticker": ticker.upper(),
             "target_price": float(target_price),
+            "current_price": float(current_price) if current_price is not None else None,
             "fair_value": float(fair_value) if fair_value is not None else None
         }
-        supabase.table("alerts").insert(data).execute()
+        res = supabase.table("alerts").insert(data).execute()
         return True
     except Exception as e:
         print(f"❌ Supabase Insert Error: {e}")
@@ -60,8 +61,14 @@ def delete_alert(alert_id):
         print(f"❌ Supabase Delete Error: {e}")
         return False
 
+def update_alert_current_price(alert_id, new_price):
+    try:
+        supabase.table("alerts").update({"current_price": float(new_price)}).eq("id", alert_id).execute()
+    except Exception as e:
+        print(f"❌ Supabase Update Error: {e}")
+
 # ==========================================
-# ៣. Helper Function: បង្កើត Candlestick Chart ជា Image
+# ៣. Helper Function: បង្កើត Chart Image
 # ==========================================
 def generate_chart_image(ticker):
     stock = yf.Ticker(ticker)
@@ -82,15 +89,15 @@ def generate_chart_image(ticker):
     return io.BytesIO(img_bytes)
 
 # ==========================================
-# ៤. Telegram Bot Handlers & Inline Keyboards
+# ៤. Telegram Bot Handlers
 # ==========================================
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
         "👋 **ជម្រាបសួរ! ខ្ញុំជា Stock Analyzer Bot**\n\n"
         "📈 **របៀបប្រើប្រាស់៖**\n"
-        "- គ្រាន់តែវាយបញ្ចូល Stock Ticker (ឧ. `PLTR`, `AAPL`, `NVDA`)\n"
-        "- Bot នឹងបង្ហាញ **Inline Keyboard** សម្រាប់ជ្រើសរើសមើលព័ត៌មាន, Graph, កំណត់ Alert ឬបើក Web Dashboard!"
+        "- វាយបញ្ចូល Stock Ticker (ឧ. `PLTR`, `AAPL`, `NVDA`)\n"
+        "- ប្រើប្រាស់ Inline Keyboard ដើម្បីមើលព័ត៌មាន, Graph, Alert ឬបើក Web Dashboard"
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
@@ -104,11 +111,17 @@ def set_alert_command(message):
         
         ticker, target_price = parts[1].upper(), float(parts[2])
         stock = yf.Ticker(ticker)
-        target_sell = stock.info.get('targetMeanPrice') or (stock.fast_info.last_price * 1.2 if stock.fast_info.last_price else target_price)
+        current_price = stock.fast_info.last_price or 0.0
+        target_sell = stock.info.get('targetMeanPrice') or (current_price * 1.2 if current_price else target_price)
         fair_value = target_sell * 0.833
         
-        if add_alert(message.chat.id, ticker, target_price, fair_value):
-            bot.reply_to(message, f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}** (Fair Value: **${fair_value:.2f}**) រួចរាល់!", parse_mode="Markdown")
+        if add_alert(message.chat.id, ticker, target_price, current_price, fair_value):
+            bot.reply_to(
+                message, 
+                f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
+                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
+                parse_mode="Markdown"
+            )
         else:
             bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក Alert!")
     except Exception as e:
@@ -128,7 +141,6 @@ def handle_stock_ticker(message):
             bot.reply_to(message, f"❌ រកមិនឃើញទិន្នន័យ Stock សម្រាប់ `{ticker}` ទេ!", parse_mode="Markdown")
             return
 
-        # បង្កើត Inline Keyboard Buttons
         markup = InlineKeyboardMarkup(row_width=2)
         btn_info = InlineKeyboardButton("🏢 ព័ត៌មានក្រុមហ៊ុន", callback_data=f"info_{ticker}")
         btn_graph = InlineKeyboardButton("📊 មើល Graph", callback_data=f"graph_{ticker}")
@@ -148,7 +160,6 @@ def handle_stock_ticker(message):
     except Exception as e:
         bot.reply_to(message, f"❌ បរាជ័យក្នុងការស្វែងរក Stock `{ticker}`!", parse_mode="Markdown")
 
-# Callback Handler សម្រាប់ Inline Keyboard
 @bot.callback_query_handler(func=lambda call: True)
 def callback_listener(call):
     data = call.data
@@ -204,12 +215,16 @@ def callback_listener(call):
     bot.answer_callback_query(call.id)
 
 # ==========================================
-# ៥. Background Threads & Streamlit Dashboard
+# ៥. Background Threads & Auto Price Checker
 # ==========================================
 def start_bot():
-    try: bot.skip_pending_commits()
-    except: pass
-    bot.infinity_polling(none_stop=True)
+    while True:
+        try:
+            bot.skip_pending_commits()
+            bot.infinity_polling(none_stop=True, timeout=10, long_polling_timeout=5)
+        except Exception as e:
+            print(f"Bot Polling Restarting due to error: {e}")
+            time.sleep(5)
 
 def check_price_alerts():
     while True:
@@ -224,17 +239,22 @@ def check_price_alerts():
                 stock = yf.Ticker(ticker)
                 current_price = stock.fast_info.last_price
                 
-                if current_price and current_price >= target_price:
-                    fv_info = f"\n💡 តម្លៃ Fair Value៖ **${float(fair_val):.2f}**" if fair_val else ""
-                    alert_msg = (
-                        f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
-                        f"📈 **{ticker}** បានឡើងដល់ Target ហើយ!\n"
-                        f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
-                        f"🎯 តម្លៃ Target៖ **${target_price:.2f}**"
-                        f"{fv_info}"
-                    )
-                    bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
-                    delete_alert(alert_id)
+                if current_price:
+                    # Update តម្លៃ current_price ថ្មីចុងក្រោយចូល Supabase Database
+                    update_alert_current_price(alert_id, current_price)
+                    
+                    # ពិនិត្យលក្ខខណ្ឌ alert
+                    if current_price >= target_price:
+                        fv_info = f"\n💡 តម្លៃ Fair Value៖ **${float(fair_val):.2f}**" if fair_val else ""
+                        alert_msg = (
+                            f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
+                            f"📈 **{ticker}** បានឡើងដល់ Target ហើយ!\n"
+                            f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
+                            f"🎯 តម្លៃ Target៖ **${target_price:.2f}**"
+                            f"{fv_info}"
+                        )
+                        bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
+                        delete_alert(alert_id)
         except Exception as e:
             print(f"Alert Check Error: {e}")
         time.sleep(300)
@@ -247,12 +267,15 @@ if "alert_checker_started" not in st.session_state:
     st.session_state["alert_checker_started"] = True
     threading.Thread(target=check_price_alerts, daemon=True).start()
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Stock Analyzer Web Dashboard", page_icon="📈", layout="wide")
-st.title("📈 Stock Analyzer Web Dashboard & Active Alerts")
+# ==========================================
+# ៦. Streamlit Web Dashboard Interface
+# ==========================================
+st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", layout="wide")
 
-st.sidebar.title("🔍 Search Stock")
-selected_ticker = st.sidebar.text_input("បញ្ចូល Ticker:", value="PLTR").upper()
+st.sidebar.title("🔍 Stock Search")
+selected_ticker = st.sidebar.text_input("បញ្ចូល Ticker:", value="PLTR").upper().strip()
+
+st.title("📈 Stock Analytics & Price Alert Dashboard")
 
 if selected_ticker:
     try:
@@ -260,22 +283,54 @@ if selected_ticker:
         info = stock.info
         curr_p = stock.fast_info.last_price or 0.0
         
-        st.subheader(f"🏢 {info.get('longName', selected_ticker)} (${curr_p:.2f})")
+        target_sell = info.get('targetMeanPrice') or (curr_p * 1.2 if curr_p else 0)
+        fair_val = target_sell * 0.833
         
-        hist = stock.history(period="1y")
-        if not hist.empty:
-            fig = go.Figure(data=[go.Candlestick(
-                x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
-            )])
-            fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True)
+        st.subheader(f"🏢 {info.get('longName', selected_ticker)}")
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Current Price", f"${curr_p:.2f}")
+        m2.metric("Target Sell", f"${target_sell:.2f}")
+        m3.metric("Fair Value", f"${fair_val:.2f}")
+        m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
+
+        col_graph, col_alert = st.columns([2, 1])
+
+        with col_graph:
+            hist = stock.history(period="1y")
+            if not hist.empty:
+                fig = go.Figure(data=[go.Candlestick(
+                    x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
+                )])
+                fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col_alert:
+            st.subheader("🔔 កំណត់ Price Alert")
+            web_chat_id = st.text_input("Telegram Chat ID:", value="", placeholder="ឧ. 123456789")
+            target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
+            
+            if st.button("💾 រក្សាទុក Alert", type="primary", use_container_width=True):
+                if not web_chat_id:
+                    st.error("⚠️ សូមបញ្ចូល Telegram Chat ID!")
+                else:
+                    if add_alert(web_chat_id, selected_ticker, target_alert_price, curr_p, fair_val):
+                        st.success(f"✅ បានរក្សាទុក Alert សម្រាប់ {selected_ticker}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ បរាជ័យក្នុងការរក្សាទុក Alert!")
     except Exception as e:
         st.error(f"Error loading stock data: {e}")
 
 st.divider()
+
+# បង្ហាញ Column current_price ក្នុងតារាង Dashboard
 st.subheader("📋 Active Price Alerts (Supabase)")
 alerts_data = get_alerts()
 if alerts_data:
-    st.dataframe(pd.DataFrame(alerts_data)[['chat_id', 'ticker', 'target_price', 'fair_value', 'created_at']], use_container_width=True)
+    df_alerts = pd.DataFrame(alerts_data)
+    # បន្ថែម 'current_price' ចូលក្នុង Column Display
+    display_cols = [c for c in ['chat_id', 'ticker', 'current_price', 'target_price', 'fair_value', 'created_at'] if c in df_alerts.columns]
+    st.dataframe(df_alerts[display_cols], use_container_width=True)
 else:
     st.info("មិនទាន់មាន Alert កំពុងសកម្មឡើយ។")
