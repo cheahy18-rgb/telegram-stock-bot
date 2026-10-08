@@ -120,7 +120,8 @@ def set_alert_command(message):
             bot.reply_to(
                 message, 
                 f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
-                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
+                # ❌ ខុស (មាន \vert{})
+                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**",
                 parse_mode="Markdown"
             )
         else:
