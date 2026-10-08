@@ -200,12 +200,19 @@ def callback_listener(call):
 
     elif data.startswith("graph_"):
         ticker = data.split("_")[1]
-        bot.send_message(chat_id, f"⏳ កំពុងបង្កើត Graph សម្រាប់ `{ticker}`...", parse_mode="Markdown")
-        img_stream = generate_chart_image(ticker)
-        if img_stream:
-            bot.send_photo(chat_id, photo=img_stream, caption=f"📊 1-Year Candlestick Chart សម្រាប់ **{ticker}**", parse_mode="Markdown")
-        else:
-            bot.send_message(chat_id, f"❌ មិនអាចទាញយក Graph សម្រាប់ `{ticker}` បានទេ!")
+        status_msg = bot.send_message(chat_id, f"⏳ កំពុងបង្កើត Graph សម្រាប់ `{ticker}`...", parse_mode="Markdown")
+        
+        try:
+            img_stream = generate_chart_image(ticker)
+            if img_stream:
+                bot.send_photo(chat_id, photo=img_stream, caption=f"📊 1-Year Candlestick Chart សម្រាប់ **{ticker}**", parse_mode="Markdown")
+                # លុបសារ "កំពុងបង្កើត Graph..." ចោលពេលផ្ញើរូបរួច
+                bot.delete_message(chat_id, status_msg.message_id)
+            else:
+                bot.edit_message_text(f"❌ មិនអាចទាញយក Graph សម្រាប់ `{ticker}` បានទេ! (សូមពិនិត្យមើល kaleido library)", chat_id, status_msg.message_id)
+        except Exception as e:
+            print(f"Graph callback error: {e}")
+            bot.edit_message_text(f"⚠️ មានបញ្ហាក្នុងការបង្កើត Graph សម្រាប់ `{ticker}`!", chat_id, status_msg.message_id)
 
     elif data.startswith("alert_"):
         ticker = data.split("_")[1]
