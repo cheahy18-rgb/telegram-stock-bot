@@ -285,10 +285,15 @@ if "alert_checker_started" not in st.session_state:
 # --- UI Interface Streamlit ---
 st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", layout="wide")
 
-st.sidebar.title("🔍 Stock Search")
-selected_ticker = st.sidebar.text_input("បញ្ចូល Ticker:", value="PLTR").upper().strip()
-
 st.title("📈 Stock Analytics & Price Alert Dashboard")
+
+# បែងចែក Layout ជា ២ Column (ខាងឆ្វេងសម្រាប់ Graph/Info និង ខាងស្តាំសម្រាប់ Search & Alert)
+col_left, col_right = st.columns([2, 1])
+
+with col_right:
+    # 🔍 Stock Search ត្រូវបានផ្លាស់ទីមកដាក់នៅខាងស្តាំលើគេ
+    st.subheader("🔍 Stock Search")
+    selected_ticker = st.text_input("បញ្ចូល Ticker:", value="PLTR").upper().strip()
 
 if selected_ticker:
     try:
@@ -299,17 +304,16 @@ if selected_ticker:
         target_sell = info.get('targetMeanPrice') or (curr_p * 1.2 if curr_p else 0)
         fair_val = target_sell * 0.833
         
-        st.subheader(f"🏢 {info.get('longName', selected_ticker)}")
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Current Price", f"${curr_p:.2f}")
-        m2.metric("Target Sell", f"${target_sell:.2f}")
-        m3.metric("Fair Value", f"${fair_val:.2f}")
-        m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
+        with col_left:
+            st.subheader(f"🏢 {info.get('longName', selected_ticker)}")
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Current Price", f"${curr_p:.2f}")
+            m2.metric("Target Sell", f"${target_sell:.2f}")
+            m3.metric("Fair Value", f"${fair_val:.2f}")
+            m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
 
-        col_graph, col_alert = st.columns([2, 1])
-
-        with col_graph:
+            # បង្ហាញ Candlestick Graph នៅខាងឆ្វេង
             hist = stock.history(period="1y")
             if not hist.empty:
                 fig = go.Figure(data=[go.Candlestick(
@@ -318,7 +322,9 @@ if selected_ticker:
                 fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, use_container_width=True)
 
-        with col_alert:
+        with col_right:
+            st.divider()
+            # 🔔 កំណត់ Price Alert នៅខាងក្រោម Stock Search
             st.subheader("🔔 កំណត់ Price Alert")
             web_chat_id = st.text_input("Telegram Chat ID:", value="", placeholder="ឧ. 123456789")
             target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
