@@ -116,11 +116,10 @@ def set_alert_command(message):
         fair_value = target_sell * 0.833
         
         if add_alert(message.chat.id, ticker, target_price, current_price, fair_value):
-            # កែប្រែត្រង់នេះដោយប្រើ | ជំនួស \vert{} ការពារ SyntaxError
+            # Line 123 ត្រូវ​បាន​កែប្រែដោយប្រើ | ជំនួស \vert{} រួចរាល់[cite: 9]
             bot.reply_to(
                 message, 
                 f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
-                # ✅ ត្រូវ (ដូរទៅជាសញ្ញា | )
                 f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** | Fair Value: **${fair_value:.2f}**",
                 parse_mode="Markdown"
             )
