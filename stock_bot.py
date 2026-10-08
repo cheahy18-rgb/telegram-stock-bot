@@ -27,14 +27,15 @@ bot = telebot.TeleBot(BOT_TOKEN)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==========================================
-# ២. Supabase Database Functions
+# ២. Supabase Database Functions (បន្ថែម fair_value)
 # ==========================================
-def add_alert(chat_id, ticker, target_price):
+def add_alert(chat_id, ticker, target_price, fair_value=None):
     try:
         data = {
             "chat_id": str(chat_id),
             "ticker": ticker.upper(),
-            "target_price": float(target_price)
+            "target_price": float(target_price),
+            "fair_value": float(fair_value) if fair_value is not None else None
         }
         res = supabase.table("alerts").insert(data).execute()
         print(f"✅ Supabase Insert Result: {res}")
@@ -85,7 +86,9 @@ def show_my_alerts(message):
         
     msg = "🔔 **បញ្ជី Alert របស់អ្នក៖**\n\n"
     for a in user_alerts:
-        msg += f"• **{a.get('ticker')}** ត្រឹមតម្លៃ **${float(a.get('target_price', 0)):.2f}**\n"
+        fv = a.get('fair_value')
+        fv_str = f" | Fair Value: **${float(fv):.2f}**" if fv else ""
+        msg += f"• **{a.get('ticker')}** ត្រឹមតម្លៃ Target: **${float(a.get('target_price', 0)):.2f}**{fv_str}\n"
     
     bot.reply_to(message, msg, parse_mode="Markdown")
 
@@ -101,10 +104,21 @@ def set_alert(message):
         target_price = float(parts[2])
         chat_id = message.chat.id
         
-        if add_alert(chat_id, ticker, target_price):
-            bot.reply_to(message, f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹមតម្លៃ **${target_price:.2f}** ដោយជោគជ័យ!", parse_mode="Markdown")
+        # ទាញយក Fair Value ស្វ័យប្រវត្តិតាម yfinance ពេលសរសេរ /alert
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        target_sell = info.get('targetMeanPrice') or (stock.fast_info.last_price * 1.2 if stock.fast_info.last_price else target_price)
+        fair_value = target_sell * 0.833
+        
+        if add_alert(chat_id, ticker, target_price, fair_value):
+            bot.reply_to(
+                message, 
+                f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹមតម្លៃ **${target_price:.2f}**\n"
+                f"💡 រក្សាទុក Fair Value: **${fair_value:.2f}** ចូលក្នុង Database រួចរាល់!", 
+                parse_mode="Markdown"
+            )
         else:
-            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក alert ទៅក្នុង Database! (សូមពិនិត្យ RLS លើ Supabase)")
+            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក alert ទៅក្នុង Database! (សូមពិនិត្យ Column `fair_value` លើ Supabase)")
     except ValueError:
         bot.reply_to(message, "⚠️ តម្លៃ Target Price ត្រូវតែជាលេខ!")
 
@@ -187,6 +201,7 @@ def check_price_alerts():
                 chat_id = alert.get('chat_id')
                 ticker = alert.get('ticker')
                 target_price = float(alert.get('target_price', 0))
+                fair_val = alert.get('fair_value')
                 
                 if not ticker or not target_price:
                     continue
@@ -197,13 +212,14 @@ def check_price_alerts():
                 if current_price is None:
                     continue
                 
-                # លក្ខខណ្ឌប្រសិនបើតម្លៃឡើងដល់ ឬលើស Target Price
                 if current_price >= target_price:
+                    fv_info = f"\n💡 តម្លៃ Fair Value៖ **${float(fair_val):.2f}**" if fair_val else ""
                     alert_msg = (
                         f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
                         f"📈 **{ticker}** ពេលនេះបានឡើងដល់តម្លៃ Target ហើយ!\n"
                         f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
                         f"🎯 តម្លៃ Target របស់អ្នក៖ **${target_price:.2f}**"
+                        f"{fv_info}"
                     )
                     bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
                     delete_alert(alert_id)
@@ -212,9 +228,8 @@ def check_price_alerts():
         except Exception as e:
             print(f"❌ Error in price alert checker thread: {e}")
             
-        time.sleep(300) # ត្រួតពិនិត្យរៀងរាល់ ៥ នាទីម្តង
+        time.sleep(300)
 
-# បង្កើត Threads ឱ្យរត់ស្របគ្នាពេល Streamlit Launch
 if "bot_started" not in st.session_state:
     st.session_state["bot_started"] = True
     threading.Thread(target=start_bot, daemon=True).start()
@@ -272,7 +287,8 @@ with col1:
     alerts_data = get_alerts()
     if alerts_data:
         df_alerts = pd.DataFrame(alerts_data)
-        display_cols = [c for c in ['chat_id', 'ticker', 'target_price', 'created_at'] if c in df_alerts.columns]
+        # បន្ថែម 'fair_value' ចូលក្នុងតារាង Dashboard
+        display_cols = [c for c in ['chat_id', 'ticker', 'target_price', 'fair_value', 'created_at'] if c in df_alerts.columns]
         st.dataframe(df_alerts[display_cols], width='stretch')
     else:
         st.info("មិនទាន់មាន Alert ក្នុង Database នៅឡើយទេ។")
