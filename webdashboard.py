@@ -1,11 +1,14 @@
 import os
 import pandas as pd
 import yfinance as yf
-import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
+# ==========================================
+# ១. Setup & Config
+# ==========================================
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -40,7 +43,6 @@ st.title("📈 Stock Analytics & Price Alert Dashboard")
 
 url_params = st.query_params
 default_ticker = url_params.get("ticker", "PLTR").upper()
-# បើចាប់បាន chat_id ពី URL គឺប្រើ chat_id នោះ បើអត់ទេប្រើ "web_user"
 auto_chat_id = url_params.get("chat_id", "web_user")
 
 col_left, col_right = st.columns([2, 1])
@@ -67,13 +69,32 @@ if selected_ticker:
             m3.metric("Fair Value", f"${fair_val:.2f}")
             m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
 
-            hist = stock.history(period="1y")
-            if not hist.empty:
-                fig = go.Figure(data=[go.Candlestick(
-                    x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
-                )])
-                fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
-                st.plotly_chart(fig, width="stretch")
+            st.divider()
+            st.subheader(f"📊 TradingView Chart: {selected_ticker}")
+
+            # TradingView Widget Component
+            tradingview_html = f"""
+            <div class="tradingview-widget-container" style="height:500px;width:100%;">
+              <div id="tradingview_chart" style="height:calc(100% - 32px);width:100%;"></div>
+              <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+              <script type="text/javascript">
+              new TradingView.widget({{
+                "autosize": true,
+                "symbol": "{selected_ticker}",
+                "interval": "D",
+                "timezone": "Etc/UTC",
+                "theme": "dark",
+                "style": "1",
+                "locale": "en",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "allow_symbol_change": true,
+                "container_id": "tradingview_chart"
+              }});
+              </script>
+            </div>
+            """
+            components.html(tradingview_html, height=520)
 
         with col_right:
             st.divider()
