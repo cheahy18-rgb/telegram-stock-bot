@@ -19,7 +19,8 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://telegram-stock-bot-8j9u.onrender.com/")
+# ដាក់ URL របស់ Render Streamlit App របស់អ្នក
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://your-app.onrender.com")
 
 if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ សូមពិនិត្យមើល Environment Variables (BOT_TOKEN, SUPABASE_URL, SUPABASE_KEY)!")
@@ -68,14 +69,13 @@ def update_alert_current_price(alert_id, new_price):
         print(f"❌ Supabase Update Error: {e}")
 
 # ==========================================
-# ៣. Helper Function: បង្កើត Chart Image (Safe Version)
+# ៣. Helper Function: បង្កើត Chart Image
 # ==========================================
 def generate_chart_image(ticker):
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
         if hist.empty:
-            print(f"❌ No history data for {ticker}")
             return None
         
         fig = go.Figure(data=[go.Candlestick(
@@ -87,8 +87,6 @@ def generate_chart_image(ticker):
             template="plotly_dark",
             xaxis_rangeslider_visible=False
         )
-        
-        # បំប្លែងទៅជា PNG Bytes
         img_bytes = fig.to_image(format="png", engine="kaleido")
         return io.BytesIO(img_bytes)
     except Exception as e:
@@ -103,7 +101,7 @@ def send_welcome(message):
     welcome_text = (
         "👋 **ជម្រាបសួរ! ខ្ញុំជា Stock Analyzer Bot**\n\n"
         "📈 **របៀបប្រើប្រាស់៖**\n"
-        "- វាយបញ្ចូល Stock Ticker (ឧ. `PLTR`, `AAPL`, `NVDA`)\n"
+        "- វាយបញ្ចូល Stock Ticker (ឧ. `PLTR`, `AAPL`, `SOUN`)\n"
         "- ប្រើប្រាស់ Inline Keyboard ដើម្បីមើលព័ត៌មាន, Graph, Alert ឬបើក Web Dashboard"
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
@@ -123,11 +121,10 @@ def set_alert_command(message):
         fair_value = target_sell * 0.833
         
         if add_alert(message.chat.id, ticker, target_price, current_price, fair_value):
-            # Line 123 ត្រូវ​បាន​កែប្រែដោយប្រើ | ជំនួស \vert{} រួចរាល់[cite: 9]
             bot.reply_to(
                 message, 
                 f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
-                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** | Fair Value: **${fair_value:.2f}**",
+                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
                 parse_mode="Markdown"
             )
         else:
@@ -153,7 +150,10 @@ def handle_stock_ticker(message):
         btn_info = InlineKeyboardButton("🏢 ព័ត៌មានក្រុមហ៊ុន", callback_data=f"info_{ticker}")
         btn_graph = InlineKeyboardButton("📊 មើល Graph", callback_data=f"graph_{ticker}")
         btn_alert = InlineKeyboardButton("🔔 កំណត់ Price Alert", callback_data=f"alert_{ticker}")
-        btn_web = InlineKeyboardButton("🌐 Web Dashboard", url=DASHBOARD_URL)
+        
+        # ភ្ជប់ Query Parameter ?ticker=... ទៅ URL
+        dynamic_dashboard_url = f"{DASHBOARD_URL}?ticker={ticker}"
+        btn_web = InlineKeyboardButton("🌐 Web Dashboard", url=dynamic_dashboard_url)
         
         markup.add(btn_info, btn_graph, btn_alert, btn_web)
 
@@ -206,12 +206,10 @@ def callback_listener(call):
             img_stream = generate_chart_image(ticker)
             if img_stream:
                 bot.send_photo(chat_id, photo=img_stream, caption=f"📊 1-Year Candlestick Chart សម្រាប់ **{ticker}**", parse_mode="Markdown")
-                # លុបសារ "កំពុងបង្កើត Graph..." ចោលពេលផ្ញើរូបរួច
                 bot.delete_message(chat_id, status_msg.message_id)
             else:
-                bot.edit_message_text(f"❌ មិនអាចទាញយក Graph សម្រាប់ `{ticker}` បានទេ! (សូមពិនិត្យមើល kaleido library)", chat_id, status_msg.message_id)
+                bot.edit_message_text(f"❌ មិនអាចទាញយក Graph សម្រាប់ `{ticker}` បានទេ!", chat_id, status_msg.message_id)
         except Exception as e:
-            print(f"Graph callback error: {e}")
             bot.edit_message_text(f"⚠️ មានបញ្ហាក្នុងការបង្កើត Graph សម្រាប់ `{ticker}`!", chat_id, status_msg.message_id)
 
     elif data.startswith("alert_"):
@@ -224,7 +222,7 @@ def callback_listener(call):
             f"🔔 **របៀបកំណត់ Price Alert សម្រាប់ {ticker}**\n\n"
             f"សូម វាយបញ្ជា៖\n"
             f"`/alert {ticker} {sug_p}`\n\n"
-            f"*(ចំណាំ៖ Chy អាចប្តូរលេខ `{sug_p}` ទៅជាតម្លៃដែលចង់ឱ្យ Alert បាន)*"
+            f"*(ចំណាំ៖ អាចប្តូរលេខ `{sug_p}` ទៅជាតម្លៃដែលចង់ឱ្យ Alert បាន)*"
         )
         bot.send_message(chat_id, msg, parse_mode="Markdown")
 
@@ -275,8 +273,6 @@ def check_price_alerts():
 # ==========================================
 if "bot_started" not in st.session_state:
     st.session_state["bot_started"] = True
-    
-    # លុប Pending Webhooks ចាស់ៗចោលមុនរត់ Polling
     try:
         bot.remove_webhook()
     except Exception as e:
@@ -301,13 +297,16 @@ st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", lay
 
 st.title("📈 Stock Analytics & Price Alert Dashboard")
 
-# បែងចែក Layout ជា ២ Column (ខាងឆ្វេងសម្រាប់ Graph/Info និង ខាងស្តាំសម្រាប់ Search & Alert)
+# ចាប់យក Ticker ពី URL Query Parameter (?ticker=SOUN) មកធ្វើជា Default Value[cite: 12]
+url_params = st.query_params
+default_ticker = url_params.get("ticker", "PLTR").upper()
+
 col_left, col_right = st.columns([2, 1])
 
 with col_right:
-    # 🔍 Stock Search ត្រូវបានផ្លាស់ទីមកដាក់នៅខាងស្តាំលើគេ
+    # 🔍 Stock Search នៅខាងស្តាំលើគេ[cite: 8]
     st.subheader("🔍 Stock Search")
-    selected_ticker = st.text_input("បញ្ចូល Ticker:", value="PLTR").upper().strip()
+    selected_ticker = st.text_input("បញ្ចូល Ticker:", value=default_ticker).upper().strip()
 
 if selected_ticker:
     try:
@@ -327,7 +326,6 @@ if selected_ticker:
             m3.metric("Fair Value", f"${fair_val:.2f}")
             m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
 
-            # បង្ហាញ Candlestick Graph នៅខាងឆ្វេង
             hist = stock.history(period="1y")
             if not hist.empty:
                 fig = go.Figure(data=[go.Candlestick(
@@ -338,7 +336,7 @@ if selected_ticker:
 
         with col_right:
             st.divider()
-            # 🔔 កំណត់ Price Alert នៅខាងក្រោម Stock Search
+            # 🔔 កំណត់ Price Alert នៅក្រោម Stock Search[cite: 8]
             st.subheader("🔔 កំណត់ Price Alert")
             web_chat_id = st.text_input("Telegram Chat ID:", value="", placeholder="ឧ. 123456789")
             target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
@@ -364,4 +362,4 @@ if alerts_data:
     display_cols = [c for c in ['chat_id', 'ticker', 'current_price', 'target_price', 'fair_value', 'created_at'] if c in df_alerts.columns]
     st.dataframe(df_alerts[display_cols], use_container_width=True)
 else:
-    st.info("មិនទាន់មាន Alert កំពុងសកម្មឡើយ។")
+    st.info("មិនទាន់មាន Alert កំពុងសកម្មឡើយ focus។")
