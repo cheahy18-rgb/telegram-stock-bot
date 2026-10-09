@@ -223,143 +223,36 @@ def callback_listener(call):
             f"`/alert {ticker} {sug_p}`\n\n"
             f"*(ចំណាំ៖ អាចប្តូរលេខ `{sug_p}` ទៅជាតម្លៃដែលចង់ឱ្យ Alert បាន)*"
         )
-        bot.send_message(chat_id, msg, parse_mode="Markdown")
+        រូបភាព Render Log នេះបង្ហាញបញ្ហាច្បាស់លាស់ណាស់[cite: 17]៖ នៅក្នុងឯកសារ `stock_bot.py` ត្រង់ **Line 344** មានជាប់អក្សរខ្មែរ **`ដើម្បីដោះស្រាយទាំង ២ ចំណុចនេះឱ្យបានស្អាត និងដើរ...`** ចូលទៅក្នុងកូដ Python[cite: 17]!
 
-    bot.answer_callback_query(call.id)
+វាធ្វើឱ្យកើតមាន `SyntaxError: invalid character 'ដើ' (U+17E2)` ព្រោះ Python មើលឃើញអក្សរខ្មែរនៅក្រៅ Comment/String ធ្វើឱ្យ Script គាំង (Crash)[cite: 17]។
 
-# ==========================================
-# ៥. Background Worker Thread (Alert Checker)
-# ==========================================
-def check_price_alerts():
-    while True:
-        try:
-            alerts = get_alerts()
-            for alert in alerts:
-                try:
-                    alert_id = alert.get('id')
-                    chat_id = alert.get('chat_id')
-                    ticker = alert.get('ticker')
-                    target_price = float(alert.get('target_price', 0))
-                    fair_val = alert.get('fair_value')
-                    
-                    if not ticker or not target_price: continue
-                    stock = yf.Ticker(ticker)
-                    current_price = getattr(stock.fast_info, 'last_price', None)
-                    
-                    if current_price:
-                        update_alert_current_price(alert_id, current_price)
-                        
-                        if current_price >= target_price:
-                            fv_info = f"\n💡 តម្លៃ Fair Value៖ **${float(fair_val):.2f}**" if fair_val else ""
-                            alert_msg = (
-                                f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
-                                f"📈 **{ticker}** បានឡើងដល់ Target ហើយ!\n"
-                                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
-                                f"🎯 តម្លៃ Target៖ **${target_price:.2f}**"
-                                f"{fv_info}"
-                            )
-                            bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
-                            delete_alert(alert_id)
-                except Exception as inner_e:
-                    print(f"Error processing alert for {alert}: {inner_e}")
-        except Exception as e:
-            print(f"Alert Check Loop Error: {e}")
-        
-        time.sleep(300)
+---
 
-# ==========================================
-# ៦. Streamlit Dashboard & Main Execution
-# ==========================================
-if "bot_started" not in st.session_state:
-    st.session_state["bot_started"] = True
+### របៀបដោះស្រាយ៖
 
-    def run_polling_safe():
-        try:
-            bot.remove_webhook()
-            time.sleep(1)
-        except Exception as e:
-            print(f"Webhook note: {e}")
+1. បើកឯកសារ `stock_bot.py` នៅក្នុង Code Editor
+2. ក្រឡេកមើលផ្នែកខាងក្រោមបង្អស់ (ជុំវិញ Line 344)[cite: 17]
+3. **លុបអក្សរខ្មែរដែលច្រឡំ Paste ចូលក្នុងកូដនោះចោលទាំងអស់**
+4. ប្រាកដថាកូដនៅផ្នែកខាងក្រោមបង្អស់ត្រូវ បានសរសេរត្រឹមត្រូវបែបនេះ៖
 
-        while True:
-            try:
-                bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
-            except Exception as e:
-                print(f"Polling Exception: {e}")
-                time.sleep(3)
-
-    threading.Thread(target=run_polling_safe, daemon=True).start()
-
-if "alert_checker_started" not in st.session_state:
-    st.session_state["alert_checker_started"] = True
+```python
+if __name__ == "__main__":
+    # រត់ Alert Checker នៅ Background
     threading.Thread(target=check_price_alerts, daemon=True).start()
 
-# --- UI Interface Streamlit ---
-st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", layout="wide")
+    print("🤖 Starting Telegram Bot...")
 
-st.title("📈 Stock Analytics & Price Alert Dashboard")
-
-# ចាប់យក query parameters (ticker និង chat_id)
-url_params = st.query_params
-default_ticker = url_params.get("ticker", "PLTR").upper()
-auto_chat_id = url_params.get("chat_id", "")
-
-col_left, col_right = st.columns([2, 1])
-
-with col_right:
-    st.subheader("🔍 Stock Search")
-    selected_ticker = st.text_input("បញ្ចូល Ticker:", value=default_ticker).upper().strip()
-
-if selected_ticker:
     try:
-        stock = yf.Ticker(selected_ticker)
-        info = stock.info
-        curr_p = getattr(stock.fast_info, 'last_price', 0.0) or 0.0
-        
-        target_sell = info.get('targetMeanPrice') or (curr_p * 1.2 if curr_p else 0)
-        fair_val = target_sell * 0.833
-        
-        with col_left:
-            st.subheader(f"🏢 {info.get('longName', selected_ticker)}")
-            
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Current Price", f"${curr_p:.2f}")
-            m2.metric("Target Sell", f"${target_sell:.2f}")
-            m3.metric("Fair Value", f"${fair_val:.2f}")
-            m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
+        bot.remove_webhook()
+        time.sleep(1)
+    except Exception as e:
+        print(f"Webhook reset note: {e}")
 
-            hist = stock.history(period="1y")
-            if not hist.empty:
-                fig = go.Figure(data=[go.Candlestick(
-                    x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
-                )])
-                fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
-                st.plotly_chart(fig, width="stretch")
-
-        with col_right:
-            st.divider()
-            st.subheader("🔔 កំណត់ Price Alert")
-            
-            # ផ្តល់ប្រអប់បញ្ចូល Chat ID ដោយស្វ័យប្រវត្តិ (ដកសារ Warning ចោល)
-            input_chat_id = st.text_input("Telegram Chat ID:", value=auto_chat_id, placeholder="ឧ. 123456789")
-            target_alert_ដើម្បីដោះស្រាយទាំង ២ ចំណុចនេះឱ្យបានស្អាត និងដើរ ១០០%៖
-
----
-
-### ១. លុបសារ "គ្មាន Chat ID..." ចេញពី Web Dashboard
-
-ដើម្បីឱ្យ Dashboard មើលទៅ Clean គ្មានសារ Warning ញ៉ញ៉ៃ ហើយអនុញ្ញាតឱ្យបញ្ចូល Alert បានស្រួល លោក Chy គ្រាន់តែអនុវត្តកូដក្នុង `app.py` ខាងក្រោម៖
-
-* លុបប្រអប់ `st.warning("⚠️ គ្មាន Chat ID...")` ចោល[cite: 12]
-* កំណត់ `chat_id` ជា Option ដោយស្វ័យប្រវត្តិ (បើទាញបានពី URL គឺប្រើ URL បើអត់ទេគឺកំណត់ `chat_id = "default"` ឬមិនទាមទារឱ្យមាន)[cite: 12]
-
----
-
-### ២. ដំណោះស្រាយបញ្ហា Bot នៅតែមិនឆ្លើយតប (No Response)
-
-ការដែលផ្ញើ `/start` ឬ Ticker ទៅហើយ Bot នៅតែស្ងាត់ឈឹង[cite: 13] គឺមកពី ** Render Start Command រត់តែ Streamlit តែមួយមុខ (ភ្លេចរត់ `bot.py`)** ឬ **`BOT_TOKEN` ក្នុង Render Environment Variables មិនទាន់ត្រូវ**[cite: 2]។
-
-#### ជំហានទី ១៖ ពិនិត្យ Start Command លើ Render Dashboard
-1. ចូលទៅ **Render Dashboard** -> ចុចលើ Service របស់អ្នក -> **Settings**[cite: 2]
-2. ត្រង់ប្រអប់ **Start Command** ត្រូវតែដាក់កូដនេះដាច់ខាត (ដើម្បីឱ្យវាដំណើរការទាំង Bot និង Dashboard ព្រមគ្នា)៖
-   ```bash
-   python stock_bot.py & streamlit run webdashboard.py --server.port $PORT --server.address 0.0.0.0
+    while True:
+        try:
+            print("🟢 Bot is listening for messages...")
+            bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
+        except Exception as e:
+            print(f"⚠️ Polling connection lost: {e}")
+            time.sleep(3)
