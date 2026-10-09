@@ -97,6 +97,6 @@ alerts_data = get_alerts()
 if alerts_data:
     df_alerts = pd.DataFrame(alerts_data)
     display_cols = [c for c in ['chat_id', 'ticker', 'current_price', 'target_price', 'fair_value', 'created_at'] if c in df_alerts.columns]
-    st.dataframe(df_alerts[display_cols], use_container_width=True)
+    st.dataframe(df_alerts[display_cols], width="stretch")
 else:
     st.info("មិនទាន់មាន Alert កំពុងសកម្មឡើយ។")
