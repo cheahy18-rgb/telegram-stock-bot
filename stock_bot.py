@@ -10,6 +10,10 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
 from supabase import Client, create_client
+import matplotlib
+matplotlib.use('Agg') # សម្រាប់ Server គ្មាន GUI
+import matplotlib.pyplot as plt
+import mplfinance as mpf
 
 # ==========================================
 # ១. ទាញយក Environment Variables & Setup
@@ -67,9 +71,6 @@ def update_alert_current_price(alert_id, new_price):
     except Exception as e:
         print(f"❌ Supabase Update Error: {e}")
 
-# ==========================================
-# ៣. Helper Function: បង្កើត Chart Image
-# ==========================================
 def generate_chart_image(ticker):
     try:
         stock = yf.Ticker(ticker)
@@ -77,21 +78,21 @@ def generate_chart_image(ticker):
         if hist.empty:
             return None
         
-        fig = go.Figure(data=[go.Candlestick(
-            x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
-        )])
-        fig.update_layout(
-            title=f"{ticker} 1-Year Candlestick Chart",
-            yaxis_title="Price (USD)",
-            template="plotly_dark",
-            xaxis_rangeslider_visible=False
+        # បង្កើត Candlestick Chart ជាមួយ mplfinance
+        buf = io.BytesIO()
+        mpf.plot(
+            hist, 
+            type='candle', 
+            style='charles', 
+            volume=False, 
+            title=f"\n{ticker} 1-Year Candlestick Chart",
+            savefig=dict(fname=buf, format='png', dpi=100, bbox_inches='tight')
         )
-        img_bytes = fig.to_image(format="png", engine="kaleido")
-        return io.BytesIO(img_bytes)
+        buf.seek(0)
+        return buf
     except Exception as e:
         print(f"❌ Error generating chart image for {ticker}: {e}")
         return None
-
 # ==========================================
 # ៤. Telegram Bot Handlers
 # ==========================================
