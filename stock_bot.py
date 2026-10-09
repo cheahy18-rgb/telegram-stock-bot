@@ -232,8 +232,53 @@ def callback_listener(call):
 #4. ប្រាកដថាកូដនៅផ្នែកខាងក្រោមបង្អស់ត្រូវ បានសរសេរត្រឹមត្រូវបែបនេះ៖
 
 #```python
+# ==========================================
+# ៥. Background Alert Checker Function
+# ==========================================
+def check_price_alerts():
+    while True:
+        try:
+            alerts = get_alerts()
+            for alert in alerts:
+                try:
+                    alert_id = alert.get('id')
+                    chat_id = alert.get('chat_id')
+                    ticker = alert.get('ticker')
+                    target_price = float(alert.get('target_price', 0))
+                    fair_val = alert.get('fair_value')
+                    
+                    if not ticker or not target_price:
+                        continue
+
+                    stock = yf.Ticker(ticker)
+                    current_price = getattr(stock.fast_info, 'last_price', None)
+                    
+                    if current_price:
+                        update_alert_current_price(alert_id, current_price)
+                        
+                        if current_price >= target_price:
+                            fv_info = f"\n💡 តម្លៃ Fair Value៖ **${float(fair_val):.2f}**" if fair_val else ""
+                            alert_msg = (
+                                f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
+                                f"📈 **{ticker}** បានឡើងដល់ Target ហើយ!\n"
+                                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}**\n"
+                                f"🎯 តម្លៃ Target៖ **${target_price:.2f}**"
+                                f"{fv_info}"
+                            )
+                            bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
+                            delete_alert(alert_id)
+                except Exception as inner_e:
+                    print(f"Error checking alert for {alert}: {inner_e}")
+        except Exception as e:
+            print(f"Alert Check Loop Error: {e}")
+        
+        time.sleep(300) # រក្សាការពិនិត្យរៀងរាល់ ៥ នាទីម្តង
+
+# ==========================================
+# ៦. Main Execution Block
+# ==========================================
 if __name__ == "__main__":
-    # រត់ Alert Checker នៅ Background
+    # ឥឡូវនេះ check_price_alerts មានក្នុងកូដហើយ លែងលោត NameError ទៀតហើយ
     threading.Thread(target=check_price_alerts, daemon=True).start()
 
     print("🤖 Starting Telegram Bot...")
@@ -249,5 +294,5 @@ if __name__ == "__main__":
             print("🟢 Bot is listening for messages...")
             bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
         except Exception as e:
-            print(f"⚠️ Polling connection lost: {e}")
+            print(f"⚠️ Polling Error: {e}")
             time.sleep(3)
