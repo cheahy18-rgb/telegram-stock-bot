@@ -20,7 +20,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 # ដាក់ URL របស់ Render Streamlit App របស់អ្នក
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://your-app.onrender.com")
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://telegram-stock-bot-8j9u.onrender.com/")
 
 if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ សូមពិនិត្យមើល Environment Variables (BOT_TOKEN, SUPABASE_URL, SUPABASE_KEY)!")
