@@ -212,17 +212,24 @@ def check_price_alerts():
         time.sleep(300)
 
 if __name__ == "__main__":
+    # ចាប់ផ្តើម Background Alert Checker
     threading.Thread(target=check_price_alerts, daemon=True).start()
-    
+
+    print("🤖 Starting Telegram Bot...")
+
+    # ១. លុប Webhook ឬ Pending Updates ចាស់ៗចោលទាំងអស់ ការពារការជាប់ស្ទះ Polling
     try:
         bot.remove_webhook()
+        time.sleep(1)
     except Exception as e:
-        print(f"Webhook note: {e}")
-        
-    print("🟢 Bot is starting...")
+        print(f"Webhook reset note: {e}")
+
+    # ២. Infinite Polling Loop ជាមួយ Auto-Recovery
     while True:
         try:
-            bot.infinity_polling(timeout=20, long_polling_timeout=10, skip_pending=True)
+            print("🟢 Bot is listening for messages...")
+            # long_polling_timeout ខ្លី និង skip_pending=True ដើម្បីកុំឱ្យស្ទះសារចាស់ៗ
+            bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
         except Exception as e:
-            print(f"⚠️ Polling Error: {e}")
-            time.sleep(5)
+            print(f"⚠️ Polling connection lost: {e}")
+            time.sleep(3)  # រង់ចាំ ៣ វិនាទី រួចរត់ឡើងវិញដោយស្វ័យប្រវត្តិ
