@@ -79,7 +79,7 @@ if selected_ticker:
             web_chat_id = st.text_input("Telegram Chat ID:", value="", placeholder="ឧ. 123456789")
             target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
             
-            if st.button("💾 រក្សាទុក Alert", type="primary", use_container_width=True):
+            if st.button("💾 រក្សាទុក Alert", type="primary", width="stretch"):
                 if not web_chat_id:
                     st.error("⚠️ សូមបញ្ចូល Telegram Chat ID!")
                 else:
