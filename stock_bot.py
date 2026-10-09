@@ -302,7 +302,7 @@ if __name__ == "__main__":
 # ៦. Main Execution Block
 # ==========================================
 if __name__ == "__main__":
-    # ឥឡូវនេះ check_price_alerts មានក្នុងកូដហើយ លែងលោត NameError ទៀតហើយ
+    # Start background alert checker thread
     threading.Thread(target=check_price_alerts, daemon=True).start()
 
     print("🤖 Starting Telegram Bot...")
