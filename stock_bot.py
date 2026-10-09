@@ -297,3 +297,26 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"⚠️ Polling Error: {e}")
             time.sleep(3)
+
+# ==========================================
+# ៦. Main Execution Block
+# ==========================================
+if __name__ == "__main__":
+    # ឥឡូវនេះ check_price_alerts មានក្នុងកូដហើយ លែងលោត NameError ទៀតហើយ
+    threading.Thread(target=check_price_alerts, daemon=True).start()
+
+    print("🤖 Starting Telegram Bot...")
+
+    try:
+        bot.remove_webhook()
+        time.sleep(1)
+    except Exception as e:
+        print(f"Webhook reset note: {e}")
+
+    while True:
+        try:
+            print("🟢 Bot is listening for messages...")
+            bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
+        except Exception as e:
+            print(f"⚠️ Polling Error: {e}")
+            time.sleep(3)
