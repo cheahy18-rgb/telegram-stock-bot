@@ -223,8 +223,6 @@ def callback_listener(call):
             f"`/alert {ticker} {sug_p}`\n\n"
             f"*(ចំណាំ៖ អាចប្តូរលេខ `{sug_p}` ទៅជាតម្លៃដែលចង់ឱ្យ Alert បាន)*"
         )
-       
----
 
 ### របៀបដោះស្រាយ៖
 
