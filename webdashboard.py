@@ -38,10 +38,10 @@ st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", lay
 
 st.title("📈 Stock Analytics & Price Alert Dashboard")
 
-# ចាប់យក query parameters ពី URL (ticker និង chat_id ស្វ័យប្រវត្តិ)
 url_params = st.query_params
 default_ticker = url_params.get("ticker", "PLTR").upper()
-auto_chat_id = url_params.get("chat_id", None)
+# បើចាប់បាន chat_id ពី URL គឺប្រើ chat_id នោះ បើអត់ទេប្រើ "web_user"
+auto_chat_id = url_params.get("chat_id", "web_user")
 
 col_left, col_right = st.columns([2, 1])
 
@@ -78,24 +78,15 @@ if selected_ticker:
         with col_right:
             st.divider()
             st.subheader("🔔 កំណត់ Price Alert")
-            
-            # បង្ហាញ Chat ID ដែលចាប់បានស្វ័យប្រវត្តិពី Telegram
-            if auto_chat_id:
-                st.info(f"👤 **Telegram ID:** `{auto_chat_id}`")
-            else:
-             st.warning("⚠️ គ្មាន Chat ID! សូមបើក Dashboard នេះចេញពី Telegram Bot។")
 
-             target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
+            target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
             
             if st.button("💾 រក្សាទុក Alert", type="primary", width="stretch"):
-                if not auto_chat_id:
-                    st.error("❌ មិនអាចរក្សាទុកបានទេ! សូមចុចបើក Web Dashboard ពី Telegram Bot ម្តងទៀត។")
+                if add_alert(auto_chat_id, selected_ticker, target_alert_price, curr_p, fair_val):
+                    st.success(f"✅ បានរក្សាទុក Alert សម្រាប់ {selected_ticker}!")
+                    st.rerun()
                 else:
-                    if add_alert(auto_chat_id, selected_ticker, target_alert_price, curr_p, fair_val):
-                        st.success(f"✅ បានរក្សាទុក Alert សម្រាប់ {selected_ticker}!")
-                        st.rerun()
-                    else:
-                        st.error("❌ បរាជ័យក្នុងការរក្សាទុក Alert!")
+                    st.error("❌ បរាជ័យក្នុងការរក្សាទុក Alert!")
     except Exception as e:
         st.error(f"Error loading stock data: {e}")
 
