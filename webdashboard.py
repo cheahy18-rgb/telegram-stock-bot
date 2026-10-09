@@ -38,8 +38,10 @@ st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", lay
 
 st.title("📈 Stock Analytics & Price Alert Dashboard")
 
+# ចាប់យក query parameters ពី URL (ticker និង chat_id ស្វ័យប្រវត្តិ)
 url_params = st.query_params
 default_ticker = url_params.get("ticker", "PLTR").upper()
+auto_chat_id = url_params.get("chat_id", None)
 
 col_left, col_right = st.columns([2, 1])
 
@@ -72,17 +74,24 @@ if selected_ticker:
                 )])
                 fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, width="stretch")
+
         with col_right:
             st.divider()
             st.subheader("🔔 កំណត់ Price Alert")
-            web_chat_id = st.text_input("Telegram Chat ID:", value="", placeholder="ឧ. 123456789")
+            
+            # បង្ហាញ Chat ID ដែលចាប់បានស្វ័យប្រវត្តិពី Telegram
+            if auto_chat_id:
+                st.info(f"👤 **Telegram ID:** `{auto_chat_id}`")
+            else:
+                st.warning("⚠️ គ្មាន Chat ID! សូមបើក Dashboard នេះចេញពី Telegram Bot។")
+
             target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
             
             if st.button("💾 រក្សាទុក Alert", type="primary", width="stretch"):
-                if not web_chat_id:
-                    st.error("⚠️ សូមបញ្ចូល Telegram Chat ID!")
+                if not auto_chat_id:
+                    st.error("❌ មិនអាចរក្សាទុកបានទេ! សូមចុចបើក Web Dashboard ពី Telegram Bot ម្តងទៀត។")
                 else:
-                    if add_alert(web_chat_id, selected_ticker, target_alert_price, curr_p, fair_val):
+                    if add_alert(auto_chat_id, selected_ticker, target_alert_price, curr_p, fair_val):
                         st.success(f"✅ បានរក្សាទុក Alert សម្រាប់ {selected_ticker}!")
                         st.rerun()
                     else:
