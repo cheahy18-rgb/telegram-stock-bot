@@ -83,9 +83,9 @@ if selected_ticker:
             if auto_chat_id:
                 st.info(f"👤 **Telegram ID:** `{auto_chat_id}`")
             else:
-             #st.warning("⚠️ គ្មាន Chat ID! សូមបើក Dashboard នេះចេញពី Telegram Bot។")
+             st.warning("⚠️ គ្មាន Chat ID! សូមបើក Dashboard នេះចេញពី Telegram Bot។")
 
-             #target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
+             target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
             
             if st.button("💾 រក្សាទុក Alert", type="primary", width="stretch"):
                 if not auto_chat_id:
