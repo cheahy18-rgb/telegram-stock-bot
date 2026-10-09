@@ -362,4 +362,4 @@ if selected_ticker:
 1. ចូលទៅ **Render Dashboard** -> ចុចលើ Service របស់អ្នក -> **Settings**[cite: 2]
 2. ត្រង់ប្រអប់ **Start Command** ត្រូវតែដាក់កូដនេះដាច់ខាត (ដើម្បីឱ្យវាដំណើរការទាំង Bot និង Dashboard ព្រមគ្នា)៖
    ```bash
-   python bot.py & streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+   python stock_bot.py & streamlit run webdashboard.py --server.port $PORT --server.address 0.0.0.0
