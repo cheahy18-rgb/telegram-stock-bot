@@ -71,8 +71,7 @@ if selected_ticker:
                     x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
                 )])
                 fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
-                st.plotly_chart(fig, use_container_width=True)
-
+                st.plotly_chart(fig, width="stretch")
         with col_right:
             st.divider()
             st.subheader("🔔 កំណត់ Price Alert")
