@@ -93,15 +93,15 @@ def set_alert_command(message):
         fair_value = target_sell * 0.833
         
         success = add_alert(message.chat.id, ticker, target_price, current_price, fair_value)
-       if success:
+        if success:
             bot.reply_to(
                 message, 
-                f"✅ Alert set for {ticker} at ${target_price:.2f}\n"
-                f"Current Price: ${current_price:.2f} | Fair Value: ${fair_value:.2f}", 
+                f"✅ Alert set for **{ticker}** at **${target_price:.2f}**\n"
+                f"Current Price: **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
                 parse_mode="Markdown"
             )
         else:
-            bot.reply_to(message, "❌ មានបញ្ហាក្នុងการរក្សាទុក Alert!")
+            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក Alert!")
     except Exception as e:
         bot.reply_to(message, "⚠️ មានបញ្ហាក្នុងការរក្សាទុក! សូមពិនិត្យមើល Ticker ឬលេខតម្លៃ។")
 
