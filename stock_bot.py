@@ -84,13 +84,15 @@ def set_alert_command(message):
             bot.reply_to(message, "⚠️ សូមផ្ញើតាមទម្រង់៖ `/alert <TICKER> <TARGET_PRICE>`\nឧទាហរណ៍៖ `/alert AAPL 230`", parse_mode="Markdown")
             return
         
-        ticker, target_price = parts[1].upper(), float(parts[2])
+        ticker = parts[1].upper()
+        target_price = float(parts[2])
         stock = yf.Ticker(ticker)
         current_price = getattr(stock.fast_info, 'last_price', 0.0) or 0.0
         target_sell = stock.info.get('targetMeanPrice') or (current_price * 1.2 if current_price else target_price)
         fair_value = target_sell * 0.833
         
-        if add_alert(message.chat.id, ticker, target_price, current_price, fair_value):
+        success = add_alert(message.chat.id, ticker, target_price, current_price, fair_value)
+        if success:
             bot.reply_to(
                 message, 
                 f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
@@ -98,9 +100,9 @@ def set_alert_command(message):
                 parse_mode="Markdown"
             )
         else:
-            bot.reply_to(message, "❌ មានបញ្ហាក្នុងการរក្សាទុក Alert!")
+            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក Alert!")
     except Exception as e:
-        bot.reply_to(message, "⚠️ មានបញ្ហាក្នុងการរក្សាទុក! សូមពិនិត្យមើល Ticker ឬលេខតម្លៃ។")
+        bot.reply_to(message, "⚠️ មានបញ្ហាក្នុងការរក្សាទុក! សូមពិនិត្យមើល Ticker ឬលេខតម្លៃ។")
 
 @bot.message_handler(func=lambda message: True)
 def handle_stock_ticker(message):
@@ -311,7 +313,7 @@ if __name__ == "__main__":
 
     try:
         bot.remove_webhook()
-        time.sleep(2)
+        time.sleep(1)
     except Exception as e:
         print(f"Webhook reset note: {e}")
 
