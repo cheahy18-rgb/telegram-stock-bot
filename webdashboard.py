@@ -117,7 +117,17 @@ st.subheader("📋 Active Price Alerts (Supabase)")
 alerts_data = get_alerts()
 if alerts_data:
     df_alerts = pd.DataFrame(alerts_data)
+    
+    # បម្លែង created_at ទៅជាម៉ោងក្នុងស្រុក (Asia/Phnom_Penh) និង Format ជា dd/mm/yyyy HH:mm
+    if 'created_at' in df_alerts.columns:
+        df_alerts['created_at'] = (
+            pd.to_datetime(df_alerts['created_at'])
+            .dt.tz_convert('Asia/Phnom_Penh')
+            .dt.strftime('%d/%m/%Y %H:%M')
+        )
+        
     display_cols = [c for c in ['chat_id', 'ticker', 'current_price', 'target_price', 'fair_value', 'created_at'] if c in df_alerts.columns]
     st.dataframe(df_alerts[display_cols], width="stretch")
 else:
     st.info("មិនទាន់មាន Alert កំពុងសកម្មឡើយ។")
+
