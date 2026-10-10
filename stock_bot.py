@@ -201,7 +201,7 @@ def callback_listener(call):
             parse_mode="Markdown"
         )
 
-    elif data.startswith("qtr_"):
+   elif data.startswith("qtr_"):
         parts = data.split("_")
         ticker = parts[1]
         quarter = parts[2]
@@ -209,37 +209,21 @@ def callback_listener(call):
         
         try:
             stock = yf.Ticker(ticker)
-            # ទាញយកទិន្នន័យ Quarterly Financials
             q_fin = stock.quarterly_financials
             
             if q_fin is not None and not q_fin.empty:
-                # ស្វែងរក Column ដែលត្រូវនឹងត្រីមាស (ដកស្រង់តាមកាលបរិច្ឆេទ)
-                # ឧ. Q1 (Mar/Apr), Q2 (Jun/Jul), Q3 (Sep/Oct), Q4 (Dec/Jan)
-                q_map = {"Q1": ["-03-", "-04-"], "Q2": ["-06-", "-07-"], "Q3": ["-09-", "-10-"], "Q4": ["-12-", "-01-"]}
-                target_months = q_map.get(quarter, [])
-                
-                matched_col = None
-                for col in q_fin.columns:
-                    col_str = str(col)
-                    if year in col_str and any(m in col_str for m in target_months):
-                        matched_col = col
-                        break
-                
-                # ប្រសិនបើរកមិនឃើញតាមឆ្នាំ ២០២៦ (ព្រោះមិនទាន់ចេញ Report) វានឹងទាញយកត្រីមាសចុងក្រោយគេបង្អស់មកបង្ហាញ
-                if matched_col is None:
-                    matched_col = q_fin.columns[0]
-                    date_str = str(matched_col)[:10]
-                    header_note = f"⚠️ *{quarter} {year} មិនទាន់ចេញ Report - បង្ហាញត្រីមាសចុងក្រោយ ({date_str})*"
-                else:
-                    date_str = str(matched_col)[:10]
-                    header_note = f"📅 *របាយការណ៍ត្រីមាស៖ {date_str}*"
+                # យក Column ទីមួយ (ជាទូទៅគឺជាត្រីមាសចុងក្រោយគេបង្អស់ដែលមានទិន្នន័យ)
+                matched_col = q_fin.columns[0]
+                date_str = str(matched_col)[:10]
 
-                # ស្រង់យក Revenue, Net Income និង Operating Income
                 def get_val(row_name):
-                    if row_name in q_fin.index:
-                        val = q_fin.loc[row_name, matched_col]
-                        if not pd.isna(val):
-                            return f"${val / 1e9:.2f}B" if abs(val) >= 1e9 else f"${val / 1e6:.2f}M"
+                    try:
+                        if row_name in q_fin.index:
+                            val = q_fin.loc[row_name, matched_col]
+                            if pd.notna(val):
+                                return f"${val / 1e9:.2f}B" if abs(val) >= 1e9 else f"${val / 1e6:.2f}M"
+                    except Exception:
+                        pass
                     return "N/A"
 
                 revenue = get_val("Total Revenue")
@@ -248,7 +232,7 @@ def callback_listener(call):
 
                 response_msg = (
                     f"📊 **{ticker} Earnings Overview ({quarter} {year})**\n"
-                    f"{header_note}\n\n"
+                    f"📅 *របាយការណ៍កាលបរិច្ឆេទ៖ {date_str}*\n\n"
                     f"💵 **ចំណូលសរុប (Revenue):** {revenue}\n"
                     f"📈 **ប្រាក់ចំណេញសុទ្ធ (Net Income):** {net_income}\n"
                     f"⚙️ **ចំណេញពីប្រតិបត្តិការ (Op. Income):** {op_income}\n\n"
@@ -259,7 +243,7 @@ def callback_listener(call):
                 
             bot.send_message(chat_id, response_msg, parse_mode="Markdown", disable_web_page_preview=True)
         except Exception as e:
-            print(f"Earning Error: {e}")
+            print(f"Earning Error Details: {e}")
             bot.send_message(chat_id, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យ Earning សម្រាប់ {ticker}។")
 
     elif data.startswith("alert_"):
