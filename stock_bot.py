@@ -96,8 +96,8 @@ def set_alert_command(message):
         if success:
             bot.reply_to(
                 message, 
-                f"✅ Alert set for **{ticker}** at **${target_price:.2f}**\n"
-                f"Current Price: **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
+                f"✅ Alert set for {ticker} at ${target_price:.2f}\n"
+                f"Current Price: ${current_price:.2f} | Fair Value: ${fair_value:.2f}", 
                 parse_mode="Markdown"
             )
         else:
