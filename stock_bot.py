@@ -209,18 +209,57 @@ def callback_listener(call):
         
         try:
             stock = yf.Ticker(ticker)
-            earnings_history = stock.quarterly_financials
+            # ទាញយកទិន្នន័យ Quarterly Financials
+            q_fin = stock.quarterly_financials
             
-            if earnings_history is not None and not earnings_history.empty:
+            if q_fin is not None and not q_fin.empty:
+                # ស្វែងរក Column ដែលត្រូវនឹងត្រីមាស (ដកស្រង់តាមកាលបរិច្ឆេទ)
+                # ឧ. Q1 (Mar/Apr), Q2 (Jun/Jul), Q3 (Sep/Oct), Q4 (Dec/Jan)
+                q_map = {"Q1": ["-03-", "-04-"], "Q2": ["-06-", "-07-"], "Q3": ["-09-", "-10-"], "Q4": ["-12-", "-01-"]}
+                target_months = q_map.get(quarter, [])
+                
+                matched_col = None
+                for col in q_fin.columns:
+                    col_str = str(col)
+                    if year in col_str and any(m in col_str for m in target_months):
+                        matched_col = col
+                        break
+                
+                # ប្រសិនបើរកមិនឃើញតាមឆ្នាំ ២០២៦ (ព្រោះមិនទាន់ចេញ Report) វានឹងទាញយកត្រីមាសចុងក្រោយគេបង្អស់មកបង្ហាញ
+                if matched_col is None:
+                    matched_col = q_fin.columns[0]
+                    date_str = str(matched_col)[:10]
+                    header_note = f"⚠️ *{quarter} {year} មិនទាន់ចេញ Report - បង្ហាញត្រីមាសចុងក្រោយ ({date_str})*"
+                else:
+                    date_str = str(matched_col)[:10]
+                    header_note = f"📅 *របាយការណ៍ត្រីមាស៖ {date_str}*"
+
+                # ស្រង់យក Revenue, Net Income និង Operating Income
+                def get_val(row_name):
+                    if row_name in q_fin.index:
+                        val = q_fin.loc[row_name, matched_col]
+                        if not pd.isna(val):
+                            return f"${val / 1e9:.2f}B" if abs(val) >= 1e9 else f"${val / 1e6:.2f}M"
+                    return "N/A"
+
+                revenue = get_val("Total Revenue")
+                net_income = get_val("Net Income")
+                op_income = get_val("Operating Income")
+
                 response_msg = (
-                    f"📊 **{ticker} - {quarter} {year} Earnings Overview**\n\n"
-                    f"✅ ទិន្នន័យហិរញ្ញវត្ថុសម្រាប់ {quarter} ត្រូវបានទាញយកពី Yahoo Finance ដោយជោគជ័យ។"
+                    f"📊 **{ticker} Earnings Overview ({quarter} {year})**\n"
+                    f"{header_note}\n\n"
+                    f"💵 **ចំណូលសរុប (Revenue):** {revenue}\n"
+                    f"📈 **ប្រាក់ចំណេញសុទ្ធ (Net Income):** {net_income}\n"
+                    f"⚙️ **ចំណេញពីប្រតិបត្តិការ (Op. Income):** {op_income}\n\n"
+                    f"🔗 [មើលលម្អិតលើ Yahoo Finance](https://finance.yahoo.com/quote/{ticker}/financials)"
                 )
             else:
-                response_msg = f"⚠️ រកមិនឃើញទិន្នន័យ Earning លម្អិតសម្រាប់ **{ticker}** ក្នុង {quarter} {year} ទេ!"
+                response_msg = f"⚠️ រកមិនឃើញទិន្នន័យ Earning សម្រាប់ **{ticker}** ទេ!"
                 
-            bot.send_message(chat_id, response_msg, parse_mode="Markdown")
+            bot.send_message(chat_id, response_msg, parse_mode="Markdown", disable_web_page_preview=True)
         except Exception as e:
+            print(f"Earning Error: {e}")
             bot.send_message(chat_id, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យ Earning សម្រាប់ {ticker}។")
 
     elif data.startswith("alert_"):
