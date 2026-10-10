@@ -1,22 +1,14 @@
 import os
 import time
-import io
 import threading
-import pandas as pd
-import yfinance as yf
-import plotly.graph_objects as go
-import streamlit as st
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import yfinance as yf
 from dotenv import load_dotenv
 from supabase import Client, create_client
-import matplotlib
-matplotlib.use('Agg') # សម្រាប់ Server គ្មាន GUI
-import matplotlib.pyplot as plt
-import mplfinance as mpf
 
 # ==========================================
-# ១. ទាញយក Environment Variables & Setup
+# ១. Setup Environment Variables
 # ==========================================
 load_dotenv()
 
@@ -26,13 +18,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://telegram-stock-bot-8j9u.onrender.com")
 
 if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("❌ សូមពិនិត្យមើល Environment Variables (BOT_TOKEN, SUPABASE_URL, SUPABASE_KEY)!")
+    raise ValueError("❌ Missing Environment Variables!")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==========================================
-# ២. Supabase Database Functions
+# ២. Supabase Database Helpers
 # ==========================================
 def add_alert(chat_id, ticker, target_price, current_price=None, fair_value=None):
     try:
@@ -46,15 +38,15 @@ def add_alert(chat_id, ticker, target_price, current_price=None, fair_value=None
         supabase.table("alerts").insert(data).execute()
         return True
     except Exception as e:
-        print(f"❌ Supabase Insert Error: {e}")
+        print(f"❌ Insert Error: {e}")
         return False
 
 def get_alerts():
     try:
-        response = supabase.table("alerts").select("*").execute()
-        return response.data
+        res = supabase.table("alerts").select("*").execute()
+        return res.data
     except Exception as e:
-        print(f"❌ Supabase Fetch Error: {e}")
+        print(f"❌ Fetch Error: {e}")
         return []
 
 def delete_alert(alert_id):
@@ -62,47 +54,25 @@ def delete_alert(alert_id):
         supabase.table("alerts").delete().eq("id", alert_id).execute()
         return True
     except Exception as e:
-        print(f"❌ Supabase Delete Error: {e}")
+        print(f"❌ Delete Error: {e}")
         return False
 
 def update_alert_current_price(alert_id, new_price):
     try:
         supabase.table("alerts").update({"current_price": float(new_price)}).eq("id", alert_id).execute()
     except Exception as e:
-        print(f"❌ Supabase Update Error: {e}")
+        print(f"❌ Update Error: {e}")
 
-def generate_chart_image(ticker):
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="1y")
-        if hist.empty:
-            return None
-        
-        # បង្កើត Candlestick Chart ជាមួយ mplfinance
-        buf = io.BytesIO()
-        mpf.plot(
-            hist, 
-            type='candle', 
-            style='charles', 
-            volume=False, 
-            title=f"\n{ticker} 1-Year Candlestick Chart",
-            savefig=dict(fname=buf, format='png', dpi=100, bbox_inches='tight')
-        )
-        buf.seek(0)
-        return buf
-    except Exception as e:
-        print(f"❌ Error generating chart image for {ticker}: {e}")
-        return None
 # ==========================================
-# ៤. Telegram Bot Handlers
+# ៣. Telegram Bot Message Handlers
 # ==========================================
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
         "👋 **ជម្រាបសួរ! ខ្ញុំជា Stock Analyzer Bot**\n\n"
         "📈 **របៀបប្រើប្រាស់៖**\n"
-        "- វាយបញ្ចូល Stock Ticker (ឧ. `PLTR`, `AAPL`, `SOUN`)\n"
-        "- ប្រើប្រាស់ Inline Keyboard ដើម្បីមើលព័ត៌មាន, Graph, Alert ឬបើក Web Dashboard"
+        "- វាយបញ្ចូល Stock Ticker (ឧ. `AAPL`, `PLTR`, `META`)\n"
+        "- ប្រើប្រាស់ Inline Keyboard ដើម្បីមើលព័ត៌មាន, Earning, Graph ឬបើក Web Dashboard"
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
@@ -124,7 +94,7 @@ def set_alert_command(message):
             bot.reply_to(
                 message, 
                 f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
-                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** | Fair Value: **${fair_value:.2f}**",
+                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
                 parse_mode="Markdown"
             )
         else:
@@ -149,14 +119,14 @@ def handle_stock_ticker(message):
         markup = InlineKeyboardMarkup(row_width=2)
         btn_info = InlineKeyboardButton("🏢 ព័ត៌មានក្រុមហ៊ុន", callback_data=f"info_{ticker}")
         btn_graph = InlineKeyboardButton("📊 មើល Graph", callback_data=f"graph_{ticker}")
-        btn_earning = InlineKeyboardButton("💰 Earning", callback_data=f"earning_{ticker}") # ➕ បន្ថែមថ្មី
+        btn_earning = InlineKeyboardButton("💰 Earning", callback_data=f"earning_{ticker}")
         btn_alert = InlineKeyboardButton("🔔 កំណត់ Price Alert", callback_data=f"alert_{ticker}")
         
         user_chat_id = message.chat.id
         dynamic_dashboard_url = f"{DASHBOARD_URL}?ticker={ticker}&chat_id={user_chat_id}"
         btn_web = InlineKeyboardButton("🌐 Web Dashboard", url=dynamic_dashboard_url)
         
-        markup.add(btn_info, btn_graph, btn_earning, btn_alert, btn_web) # ➕ បញ្ចូលក្នុង markup
+        markup.add(btn_info, btn_graph, btn_earning, btn_alert, btn_web)
 
         bot.reply_to(
             message,
@@ -190,9 +160,9 @@ def callback_listener(call):
             f"🏭 **វិស័យ៖** {info.get('sector', 'N/A')}\n"
             f"💵 **តម្លៃបច្ចុប្បន្ន៖** ${current_price:.2f}\n"
             f"📈 **P/E Ratio:** {info.get('trailingPE', 0):.2f} | **EPS:** ${info.get('trailingEps', 0):.2f}\n\n"
-            f"------------------------------\n"
+            f"-----------------------------------\n"
             f"🎯 **Valuation**\n"
-            f"------------------------------\n"
+            f"-----------------------------------\n"
             f"💡 **Fair Value៖** ${fair_value:.2f}\n"
             f"📊 **ស្ថានភាព៖** {status}\n"
             f"🚀 **Target Sell៖** ${target_sell:.2f}"
@@ -201,34 +171,20 @@ def callback_listener(call):
 
     elif data.startswith("graph_"):
         ticker = data.split("_")[1]
-        status_msg = bot.send_message(chat_id, f"⏳ កំពុងបង្កើត Graph សម្រាប់ `{ticker}`...", parse_mode="Markdown")
-        
-        try:
-            img_stream = generate_chart_image(ticker)
-            if img_stream:
-                bot.send_photo(chat_id, photo=img_stream, caption=f"📊 1-Year Candlestick Chart សម្រាប់ **{ticker}**", parse_mode="Markdown")
-                bot.delete_message(chat_id, status_msg.message_id)
-            else:
-                bot.edit_message_text(f"❌ មិនអាចទាញយក Graph សម្រាប់ `{ticker}` បានទេ!", chat_id, status_msg.message_id)
-        except Exception as e:
-            bot.edit_message_text(f"⚠️ មានបញ្ហាក្នុងការបង្កើត Graph សម្រាប់ `{ticker}`!", chat_id, status_msg.message_id)
-
-    elif data.startswith("alert_"):
-        ticker = data.split("_")[1]
-        stock = yf.Ticker(ticker)
-        curr_p = getattr(stock.fast_info, 'last_price', 0.0) or 0.0
-        sug_p = round(curr_p * 1.1, 2)
+        tv_link = f"https://www.tradingview.com/chart/?symbol={ticker}"
+        dash_link = f"{DASHBOARD_URL}?ticker={ticker}&chat_id={chat_id}"
         
         msg = (
-            f"🔔 **របៀបកំណត់ Price Alert សម្រាប់ {ticker}**\n\n"
-            f"សូម វាយបញ្ជា៖\n"
-            f"`/alert {ticker} {sug_p}`\n\n"
-            f"*(ចំណាំ៖ អាចប្តូរលេខ `{sug_p}` ទៅជាតម្លៃដែលចង់ឱ្យ Alert បាន)*"
-     elif data.startswith("earning_"):
+            f"📊 **Interactive Chart សម្រាប់ {ticker}**\n\n"
+            f"🔗 [មើលនៅលើ TradingView]({tv_link})\n"
+            f"🌐 [មើលនៅលើ Web Dashboard]({dash_link})"
+        )
+        bot.send_message(chat_id, msg, parse_mode="Markdown", disable_web_page_preview=False)
+
+    elif data.startswith("earning_"):
         ticker = data.split("_")[1]
-        current_year = 2026 # ឆ្នាំបច្ចុប្បន្ន
+        current_year = 2026
         
-        # បង្កើត Inline Keyboard សម្រាប់ Q1, Q2, Q3, Q4
         markup = InlineKeyboardMarkup(row_width=2)
         btn_q1 = InlineKeyboardButton(f"Q1 {current_year}", callback_data=f"qtr_{ticker}_Q1_{current_year}")
         btn_q2 = InlineKeyboardButton(f"Q2 {current_year}", callback_data=f"qtr_{ticker}_Q2_{current_year}")
@@ -251,31 +207,62 @@ def callback_listener(call):
         
         try:
             stock = yf.Ticker(ticker)
-            # ទាញយកទិន្នន័យ Financials ឬ Earnings ពី yfinance
             earnings_history = stock.quarterly_financials
             
             if earnings_history is not None and not earnings_history.empty:
-                # ទាញយកទិន្នន័យចំណូល/ចំណេញត្រួសៗ
-                response_msg = f"📊 **{ticker} - {quarter} {year} Earnings Overview**\n\n"
-                response_msg += f"✅ ទិន្នន័យត្រូវបានទាញយកពី Yahoo Finance ដោយជោគជ័យសម្រាប់ {quarter}។"
+                response_msg = (
+                    f"📊 **{ticker} - {quarter} {year} Earnings Overview**\n\n"
+                    f"✅ ទិន្នន័យហិរញ្ញវត្ថុសម្រាប់ {quarter} ត្រូវបានទាញយកពី Yahoo Finance ដោយជោគជ័យ។"
+                )
             else:
                 response_msg = f"⚠️ រកមិនឃើញទិន្នន័យ Earning លម្អិតសម្រាប់ **{ticker}** ក្នុង {quarter} {year} ទេ!"
                 
             bot.send_message(chat_id, response_msg, parse_mode="Markdown")
-                except Exception as e:
-            bot.send_message(chat_id, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យ Earning សម្រាប់ {ticker}។")       
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យ Earning សម្រាប់ {ticker}។")
+
+    elif data.startswith("alert_"):
+        ticker = data.split("_")[1]
+        stock = yf.Ticker(ticker)
+        curr_p = getattr(stock.fast_info, 'last_price', 0.0) or 0.0
+        sug_p = round(curr_p * 1.1, 2)
+        
+        markup = InlineKeyboardMarkup(row_width=2)
+        btn_preset1 = InlineKeyboardButton(f"🎯 +10% (${sug_p})", callback_data=f"setalert_{ticker}_{sug_p}")
+        btn_preset2 = InlineKeyboardButton(f"🎯 Web Dashboard", url=f"{DASHBOARD_URL}?ticker={ticker}&chat_id={chat_id}")
+        markup.add(btn_preset1, btn_preset2)
+
+        msg = (
+            f"🔔 **កំណត់ Price Alert សម្រាប់ {ticker}**\n\n"
+            f"💵 តម្លៃបច្ចុប្បន្ន៖ **${curr_p:.2f}**\n"
+            f"👇 លោកអ្នកអាចចុចប៊ូតុងខាងក្រោមដើម្បីកំណត់ Target (+10%) ភ្លាមៗ ឬវាយបញ្ជា៖\n"
+            f"`/alert {ticker} {sug_p}`"
         )
+        bot.send_message(chat_id, msg, reply_markup=markup, parse_mode="Markdown")
 
-### របៀបដោះស្រាយ៖
+    elif data.startswith("setalert_"):
+        parts = data.split("_")
+        ticker = parts[1]
+        target_price = float(parts[2])
+        
+        stock = yf.Ticker(ticker)
+        curr_p = getattr(stock.fast_info, 'last_price', 0.0) or 0.0
+        target_sell = stock.info.get('targetMeanPrice') or (curr_p * 1.2)
+        fair_value = target_sell * 0.833
+        
+        if add_alert(chat_id, ticker, target_price, curr_p, fair_value):
+            bot.send_message(
+                chat_id, 
+                f"✅ បានកំណត់ Alert ស្វ័យប្រវត្តិសម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**!", 
+                parse_mode="Markdown"
+            )
+        else:
+            bot.send_message(chat_id, "❌ មានបញ្ហាក្នុងការរក្សាទុក Alert!")
 
-#1. បើកឯកសារ `stock_bot.py` នៅក្នុង Code Editor
-#2. ក្រឡេកមើលផ្នែកខាងក្រោមបង្អស់ (ជុំវិញ Line 344)[cite: 17]
-#3. **លុបអក្សរខ្មែរដែលច្រឡំ Paste ចូលក្នុងកូដនោះចោលទាំងអស់**
-#4. ប្រាកដថាកូដនៅផ្នែកខាងក្រោមបង្អស់ត្រូវ បានសរសេរត្រឹមត្រូវបែបនេះ៖
+    bot.answer_callback_query(call.id)
 
-#```python
 # ==========================================
-# ៥. Background Alert Checker Function
+# ៤. Background Price Alert Checker Function
 # ==========================================
 def check_price_alerts():
     while True:
@@ -291,13 +278,12 @@ def check_price_alerts():
                     
                     if not ticker or not target_price:
                         continue
-
+                        
                     stock = yf.Ticker(ticker)
                     current_price = getattr(stock.fast_info, 'last_price', None)
                     
                     if current_price:
                         update_alert_current_price(alert_id, current_price)
-                        
                         if current_price >= target_price:
                             fv_info = f"\n💡 តម្លៃ Fair Value៖ **${float(fair_val):.2f}**" if fair_val else ""
                             alert_msg = (
@@ -310,40 +296,15 @@ def check_price_alerts():
                             bot.send_message(chat_id, alert_msg, parse_mode="Markdown")
                             delete_alert(alert_id)
                 except Exception as inner_e:
-                    print(f"Error checking alert for {alert}: {inner_e}")
+                    print(f"Error checking alert item: {inner_e}")
         except Exception as e:
             print(f"Alert Check Loop Error: {e}")
-        
-        time.sleep(300) # រក្សាការពិនិត្យរៀងរាល់ ៥ នាទីម្តង
+        time.sleep(300)
 
 # ==========================================
-# ៦. Main Execution Block
-# ==========================================
-if __name__ == "__main__":
-    # ឥឡូវនេះ check_price_alerts មានក្នុងកូដហើយ លែងលោត NameError ទៀតហើយ
-    threading.Thread(target=check_price_alerts, daemon=True).start()
-
-    print("🤖 Starting Telegram Bot...")
-
-    try:
-        bot.remove_webhook()
-        time.sleep(1)
-    except Exception as e:
-        print(f"Webhook reset note: {e}")
-
-    while True:
-        try:
-            print("🟢 Bot is listening for messages...")
-            bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
-        except Exception as e:
-            print(f"⚠️ Polling Error: {e}")
-            time.sleep(3)
-
-# ==========================================
-# ៦. Main Execution Block
+# ៥. Main Execution Loop
 # ==========================================
 if __name__ == "__main__":
-    # Start background alert checker thread
     threading.Thread(target=check_price_alerts, daemon=True).start()
 
     print("🤖 Starting Telegram Bot...")
