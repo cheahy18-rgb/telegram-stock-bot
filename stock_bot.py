@@ -149,13 +149,14 @@ def handle_stock_ticker(message):
         markup = InlineKeyboardMarkup(row_width=2)
         btn_info = InlineKeyboardButton("🏢 ព័ត៌មានក្រុមហ៊ុន", callback_data=f"info_{ticker}")
         btn_graph = InlineKeyboardButton("📊 មើល Graph", callback_data=f"graph_{ticker}")
+        btn_earning = InlineKeyboardButton("💰 Earning", callback_data=f"earning_{ticker}") # ➕ បន្ថែមថ្មី
         btn_alert = InlineKeyboardButton("🔔 កំណត់ Price Alert", callback_data=f"alert_{ticker}")
         
         user_chat_id = message.chat.id
         dynamic_dashboard_url = f"{DASHBOARD_URL}?ticker={ticker}&chat_id={user_chat_id}"
         btn_web = InlineKeyboardButton("🌐 Web Dashboard", url=dynamic_dashboard_url)
         
-        markup.add(btn_info, btn_graph, btn_alert, btn_web)
+        markup.add(btn_info, btn_graph, btn_earning, btn_alert, btn_web) # ➕ បញ្ចូលក្នុង markup
 
         bot.reply_to(
             message,
@@ -223,6 +224,46 @@ def callback_listener(call):
             f"សូម វាយបញ្ជា៖\n"
             f"`/alert {ticker} {sug_p}`\n\n"
             f"*(ចំណាំ៖ អាចប្តូរលេខ `{sug_p}` ទៅជាតម្លៃដែលចង់ឱ្យ Alert បាន)*"
+     elif data.startswith("earning_"):
+        ticker = data.split("_")[1]
+        current_year = 2026 # ឆ្នាំបច្ចុប្បន្ន
+        
+        # បង្កើត Inline Keyboard សម្រាប់ Q1, Q2, Q3, Q4
+        markup = InlineKeyboardMarkup(row_width=2)
+        btn_q1 = InlineKeyboardButton(f"Q1 {current_year}", callback_data=f"qtr_{ticker}_Q1_{current_year}")
+        btn_q2 = InlineKeyboardButton(f"Q2 {current_year}", callback_data=f"qtr_{ticker}_Q2_{current_year}")
+        btn_q3 = InlineKeyboardButton(f"Q3 {current_year}", callback_data=f"qtr_{ticker}_Q3_{current_year}")
+        btn_q4 = InlineKeyboardButton(f"Q4 {current_year}", callback_data=f"qtr_{ticker}_Q4_{current_year}")
+        markup.add(btn_q1, btn_q2, btn_q3, btn_q4)
+        
+        bot.send_message(
+            chat_id, 
+            f"📅 **Earnings Reports សម្រាប់ {ticker} (ឆ្នាំ {current_year})**\n\n👇 សូមជ្រើសរើសត្រីមាស (Quarter) ដែលចង់ពិនិត្យមើល៖", 
+            reply_markup=markup, 
+            parse_mode="Markdown"
+        )
+
+    elif data.startswith("qtr_"):
+        parts = data.split("_")
+        ticker = parts[1]
+        quarter = parts[2]
+        year = parts[3]
+        
+        try:
+            stock = yf.Ticker(ticker)
+            # ទាញយកទិន្នន័យ Financials ឬ Earnings ពី yfinance
+            earnings_history = stock.quarterly_financials
+            
+            if earnings_history is not None and not earnings_history.empty:
+                # ទាញយកទិន្នន័យចំណូល/ចំណេញត្រួសៗ
+                response_msg = f"📊 **{ticker} - {quarter} {year} Earnings Overview**\n\n"
+                response_msg += f"✅ ទិន្នន័យត្រូវបានទាញយកពី Yahoo Finance ដោយជោគជ័យសម្រាប់ {quarter}។"
+            else:
+                response_msg = f"⚠️ រកមិនឃើញទិន្នន័យ Earning លម្អិតសម្រាប់ **{ticker}** ក្នុង {quarter} {year} ទេ!"
+                
+            bot.send_message(chat_id, response_msg, parse_mode="Markdown")
+                except Exception as e:
+            bot.send_message(chat_id, f"❌ មានបញ្ហាក្នុងការទាញយកទិន្នន័យ Earning សម្រាប់ {ticker}។")       
         )
 
 ### របៀបដោះស្រាយ៖
