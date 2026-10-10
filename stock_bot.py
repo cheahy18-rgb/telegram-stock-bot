@@ -4,6 +4,7 @@ import threading
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import yfinance as yf
+import pandas as pd
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
@@ -96,11 +97,11 @@ def set_alert_command(message):
             bot.reply_to(
                 message, 
                 f"✅ បានកំណត់ Alert សម្រាប់ **{ticker}** ត្រឹម **${target_price:.2f}**\n"
-                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** | Fair Value: **${fair_value:.2f}**", 
+                f"💵 តម្លៃបច្ចុប្បន្ន៖ **${current_price:.2f}** \vert{} Fair Value: **${fair_value:.2f}**", 
                 parse_mode="Markdown"
             )
         else:
-            bot.reply_to(message, "❌ មានបញ្ហាក្នុងការរក្សាទុក Alert!")
+            bot.reply_to(message, "❌ មានបញ្ហាក្នុងการរក្សាទុក Alert!")
     except Exception as e:
         bot.reply_to(message, "⚠️ មានបញ្ហាក្នុងការរក្សាទុក! សូមពិនិត្យមើល Ticker ឬលេខតម្លៃ។")
 
@@ -201,7 +202,7 @@ def callback_listener(call):
             parse_mode="Markdown"
         )
 
-   elif data.startswith("qtr_"):
+    elif data.startswith("qtr_"):
         parts = data.split("_")
         ticker = parts[1]
         quarter = parts[2]
@@ -212,7 +213,6 @@ def callback_listener(call):
             q_fin = stock.quarterly_financials
             
             if q_fin is not None and not q_fin.empty:
-                # យក Column ទីមួយ (ជាទូទៅគឺជាត្រីមាសចុងក្រោយគេបង្អស់ដែលមានទិន្នន័យ)
                 matched_col = q_fin.columns[0]
                 date_str = str(matched_col)[:10]
 
