@@ -311,7 +311,7 @@ if __name__ == "__main__":
 
     try:
         bot.remove_webhook()
-        time.sleep(1)
+        time.sleep(2)
     except Exception as e:
         print(f"Webhook reset note: {e}")
 
