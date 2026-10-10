@@ -1,9 +1,6 @@
 pyTelegramBotAPI
 yfinance
-plotly
-kaleido
 pandas
 streamlit
-supabase
 python-dotenv
-mplfinance
+supabase
