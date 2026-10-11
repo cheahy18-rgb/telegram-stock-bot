@@ -1,0 +1,133 @@
+import os
+import pandas as pd
+import yfinance as yf
+import streamlit as st
+import streamlit.components.v1 as components
+from dotenv import load_dotenv
+from supabase import Client, create_client
+
+# ==========================================
+# ១. Setup & Config
+# ==========================================
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def add_alert(chat_id, ticker, target_price, current_price=None, fair_value=None):
+    try:
+        data = {
+            "chat_id": str(chat_id),
+            "ticker": ticker.upper(),
+            "target_price": float(target_price),
+            "current_price": float(current_price) if current_price is not None else None,
+            "fair_value": float(fair_value) if fair_value is not None else None
+        }
+        supabase.table("alerts").insert(data).execute()
+        return True
+    except Exception as e:
+        return False
+
+def get_alerts():
+    try:
+        res = supabase.table("alerts").select("*").execute()
+        return res.data
+    except Exception as e:
+        return []
+
+st.set_page_config(page_title="Stock Analytics Dashboard", page_icon="📈", layout="wide")
+
+st.title("📈 Stock Analytics & Price Alert Dashboard")
+
+url_params = st.query_params
+default_ticker = url_params.get("ticker", "PLTR").upper()
+auto_chat_id = url_params.get("chat_id", "web_user")
+
+col_left, col_right = st.columns([2, 1])
+
+with col_right:
+    st.subheader("🔍 Stock Search")
+    selected_ticker = st.text_input("បញ្ចូល Ticker:", value=default_ticker).upper().strip()
+
+if selected_ticker:
+    try:
+        stock = yf.Ticker(selected_ticker)
+        info = stock.info
+        curr_p = getattr(stock.fast_info, 'last_price', 0.0) or 0.0
+        
+        target_sell = info.get('targetMeanPrice') or (curr_p * 1.2 if curr_p else 0)
+        fair_val = target_sell * 0.833
+        
+        with col_left:
+            st.subheader(f"🏢 {info.get('longName', selected_ticker)}")
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Current Price", f"${curr_p:.2f}")
+            m2.metric("Target Sell", f"${target_sell:.2f}")
+            m3.metric("Fair Value", f"${fair_val:.2f}")
+            m4.metric("P/E Ratio", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
+
+            st.divider()
+            st.subheader(f"📊 TradingView Chart: {selected_ticker}")
+
+            # TradingView Widget Component
+            tradingview_html = f"""
+            <div class="tradingview-widget-container" style="height:500px;width:100%;">
+              <div id="tradingview_chart" style="height:calc(100% - 32px);width:100%;"></div>
+              <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+              <script type="text/javascript">
+              new TradingView.widget({{
+                "autosize": true,
+                "symbol": "{selected_ticker}",
+                "interval": "D",
+                "timezone": "Etc/UTC",
+                "theme": "dark",
+                "style": "1",
+                "locale": "en",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "allow_symbol_change": true,
+                "container_id": "tradingview_chart"
+              }});
+              </script>
+            </div>
+            """
+            components.html(tradingview_html, height=520)
+
+        with col_right:
+            st.divider()
+            st.subheader("🔔 កំណត់ Price Alert")
+
+            target_alert_price = st.number_input("Target Price ($):", value=float(round(curr_p * 1.1, 2)))
+            
+            if st.button("💾 រក្សាទុក Alert", type="primary", width="stretch"):
+                if add_alert(auto_chat_id, selected_ticker, target_alert_price, curr_p, fair_val):
+                    st.success(f"✅ បានរក្សាទុក Alert សម្រាប់ {selected_ticker}!")
+                    st.rerun()
+                else:
+                    st.error("❌ បរាជ័យក្នុងការរក្សាទុក Alert!")
+    except Exception as e:
+        st.error(f"Error loading stock data: {e}")
+
+st.divider()
+
+st.subheader("📋 Active Price Alerts (Supabase)")
+alerts_data = get_alerts()
+if alerts_data:
+    df_alerts = pd.DataFrame(alerts_data)
+    
+    # បម្លែង created_at ទៅជាម៉ោងក្នុងស្រុក (Asia/Phnom_Penh) និង Format ជា dd/mm/yyyy HH:mm
+    if 'created_at' in df_alerts.columns:
+        df_alerts['created_at'] = (
+            pd.to_datetime(df_alerts['created_at'])
+            .dt.tz_convert('Asia/Phnom_Penh')
+            .dt.strftime('%d/%m/%Y %H:%M')
+        )
+        
+    display_cols = [c for c in ['chat_id', 'ticker', 'current_price', 'target_price', 'fair_value', 'created_at'] if c in df_alerts.columns]
+    st.dataframe(df_alerts[display_cols], width="stretch")
+else:
+    st.info("មិនទាន់មាន Alert កំពុងសកម្មឡើយ។")
+
