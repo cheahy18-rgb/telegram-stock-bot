@@ -11,7 +11,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 bot = telebot.TeleBot(BOT_TOKEN)
-celery_app = Celery("stock_tasks", broker=REDIS_URL, backend=REDIS_URL)
+celery_app = Celery("tasks.celery_app", broker=REDIS_URL, backend=REDIS_URL)
 
 @celery_app.task(name="tasks.celery_app.check_price_alerts_task")
 def check_price_alerts_task():
@@ -33,7 +33,7 @@ def check_price_alerts_task():
             if current_price:
                 update_alert_current_price(alert_id, current_price)
                 if current_price >= target_price:
-                    fv_info = f"\n💡 Fair Value: **${float(fv_val):.2f}**" if fv_val else ""
+                    fv_info = f"\n💡 Fair Value: **${float(fair_val):.2f}**" if fair_val else ""
                     alert_msg = (
                         f"🚨 **PRICE ALERT TRIGGERED!** 🚨\n\n"
                         f"📈 **{ticker}** hit target price!\n"

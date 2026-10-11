@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup Structured Logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -14,12 +13,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # ឧ. https://your-render-app.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = FastAPI()
 
-# នាំយក Handlers មកភ្ជាប់
 from handlers.commands import register_handlers
 register_handlers(bot)
 
@@ -34,7 +32,6 @@ async def receive_telegram_webhook(request: Request):
         logger.error(f"Webhook error: {e}")
         return {"status": "error", "message": str(e)}
 
-# ៥. Health Check Endpoint សម្រាប់ Render & UptimeRobot
 @app.get("/healthz")
 def health_check():
     return {"status": "healthy", "service": "telegram-stock-bot"}
@@ -46,4 +43,4 @@ def on_startup():
         bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
         logger.info(f"Webhook successfully set to {WEBHOOK_URL}/webhook")
     else:
-        logger.warning("WEBHOOK_URL is not set! Bot may not receive updates.")
+        logger.warning("WEBHOOK_URL is not set!")

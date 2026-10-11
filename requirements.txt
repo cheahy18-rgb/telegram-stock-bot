@@ -1,4 +1,6 @@
-pyTelegramBotAPI
+fastapi
+uvicorn
+telebot
 yfinance
 pandas
 streamlit
