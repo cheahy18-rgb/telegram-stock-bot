@@ -1,0 +1,8 @@
+pyTelegramBotAPI
+yfinance
+pandas
+streamlit
+python-dotenv
+supabase
+celery
+redis
